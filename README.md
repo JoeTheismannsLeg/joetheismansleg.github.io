@@ -1,5 +1,1 @@
-Test page!
-
-https://pages-themes.github.io/cayman/
-
-[Cayman Theme](http://pages-themes.github.io/cayman)
+Simple HTML example, build through github actions and deployed with pages.
