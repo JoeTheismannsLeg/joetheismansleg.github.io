@@ -28,6 +28,9 @@ sdist/
 var/
 wheels/
 *.egg-info/
+
+# Cache directory (season data caching)
+.cache/
 .installed.cfg
 *.egg
 pip-log.txt

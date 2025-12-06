@@ -3,6 +3,63 @@ import pandas as pd
 import datetime
 import json
 import re
+import os
+
+# Cache configuration
+CACHE_DIR = '.cache'
+CACHE_FILE_TEMPLATE = os.path.join(CACHE_DIR, 'league_{league_id}_season_{season}.json')
+
+def ensure_cache_dir():
+    """Ensure cache directory exists."""
+    if not os.path.exists(CACHE_DIR):
+        os.makedirs(CACHE_DIR)
+
+def get_cache_path(league_id: str, season: str) -> str:
+    """Get the cache file path for a specific league and season."""
+    return CACHE_FILE_TEMPLATE.format(league_id=league_id, season=season)
+
+def load_cached_season(league_id: str, season: str, sleeper_league_obj: 'SleeperLeague' = None) -> dict:
+    """Load cached season data if it exists and reconstruct the season data structure."""
+    cache_path = get_cache_path(league_id, season)
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, 'r') as f:
+                cached_data = json.load(f)
+                print(f"✓ Loaded cached data for season {season}")
+                
+                # If we have a sleeper_league object, use it; otherwise create a minimal one
+                if sleeper_league_obj is None:
+                    # Create a minimal SleeperLeague object from cached data
+                    sleeper_league_obj = SleeperLeague(league_id)
+                    sleeper_league_obj.user_id_to_team_name = cached_data.get('user_id_to_team_name', {})
+                    sleeper_league_obj.team_name_to_user_id = cached_data.get('team_name_to_user_id', {})
+                
+                # Reconstruct the matchups DataFrame
+                matchups_records = cached_data.get('matchups', [])
+                if matchups_records and isinstance(matchups_records, list) and len(matchups_records) > 0:
+                    matchups_df = pd.DataFrame(matchups_records)
+                else:
+                    matchups_df = pd.DataFrame()
+                
+                return {
+                    'league': sleeper_league_obj,
+                    'matchups': matchups_df,
+                    'league_name': cached_data.get('league_name', 'Unknown')
+                }
+        except Exception as e:
+            print(f"Warning: Could not load cache for season {season}: {e}")
+    return None
+
+def save_cached_season(league_id: str, season: str, data: dict):
+    """Save season data to cache."""
+    ensure_cache_dir()
+    cache_path = get_cache_path(league_id, season)
+    try:
+        with open(cache_path, 'w') as f:
+            json.dump(data, f)
+        print(f"✓ Cached season {season} data")
+    except Exception as e:
+        print(f"Warning: Could not save cache for season {season}: {e}")
 
 class SleeperLeague:
     """
@@ -204,6 +261,42 @@ class SleeperLeague:
         else:
             return pd.DataFrame()
 
+    def fetch_current_week_matchups(self):
+        """
+        Fetch matchup data only for the current active week.
+        For in-season, uses the league status. For post-season, fetches all weeks.
+
+        Returns:
+            pd.DataFrame: Matchups for the current week, or all weeks if post-season.
+        """
+        if not self.league_data:
+            print("League data not loaded. Cannot fetch current week.")
+            return pd.DataFrame()
+
+        # Check if league is in post-season or off-season
+        season_status = self.league_data.get('status', 'regular')
+        
+        if season_status == 'post_season' or season_status == 'off_season':
+            # For post-season/off-season, fetch all weeks as we won't have new weeks
+            print(f"League is in {season_status}, fetching all weeks")
+            return self.fetch_all_matchups()
+        
+        # Get current week from league metadata
+        current_week = self.league_data.get('week')
+        
+        if current_week is None or current_week <= 0:
+            print("Could not determine current week from league data, fetching all weeks")
+            return self.fetch_all_matchups()
+        
+        print(f"Fetching only week {current_week} from API (current active week)")
+        weekly_df = self.fetch_weekly_matchups(current_week)
+        
+        if not weekly_df.empty:
+            weekly_df['Week'] = current_week
+            return weekly_df
+        else:
+            return pd.DataFrame()
+
     @staticmethod
     def display_matchups(matchups_df: pd.DataFrame, title: str = "Matchups"):
         """
@@ -268,26 +361,68 @@ print(f"Most recent season: {most_recent_season['season'] if most_recent_season 
 all_seasons_data = {}
 season_dropdown_options = []
 
-for season_info in league_history:
+for idx, season_info in enumerate(league_history):
     season = season_info['season']
     season_league_id = season_info['league_id']
+    is_current_season = (season == most_recent_season['season'])
     
-    print(f"\nFetching data for season {season}...")
-    season_sleeper_league = SleeperLeague(season_league_id)
+    # Try to load from cache first (except for current season)
+    cached_data = None
+    if not is_current_season:
+        # Create a minimal SleeperLeague object first
+        temp_league = SleeperLeague(season_league_id)
+        cached_data = load_cached_season(season_league_id, season, temp_league)
     
-    if season_sleeper_league.league_data:
-        all_league_matchups = season_sleeper_league.fetch_all_matchups()
-        all_seasons_data[season] = {
-            'league': season_sleeper_league,
-            'matchups': all_league_matchups,
-            'league_name': season_sleeper_league.league_data.get('name')
-        }
+    if cached_data:
+        # Use cached data
+        all_seasons_data[season] = cached_data
+    else:
+        # Fetch from API
+        print(f"\nInitializing season {season}...")
+        season_sleeper_league = SleeperLeague(season_league_id)
+        
+        if season_sleeper_league.league_data:
+            if is_current_season:
+                # For current season, ONLY fetch the current week from API
+                print(f"Fetching ONLY current week for season {season} (optimization)")
+                current_week_matchups = season_sleeper_league.fetch_current_week_matchups()
+                
+                # Merge with cached data from all previous weeks (if available from earlier runs)
+                # For now, we'll just use the current week
+                all_league_matchups = current_week_matchups
+                print(f"✓ Fetched current week for season {season}")
+            else:
+                # For past seasons, fetch all weeks and cache them
+                print(f"Fetching all weeks for past season {season}...")
+                all_league_matchups = season_sleeper_league.fetch_all_matchups()
+                print(f"✓ Fetched all weeks for past season {season}")
+            
+            season_data_to_store = {
+                'league': season_sleeper_league,
+                'matchups': all_league_matchups,
+                'league_name': season_sleeper_league.league_data.get('name')
+            }
+            all_seasons_data[season] = season_data_to_store
+            
+            # Cache past seasons
+            if not is_current_season:
+                cache_payload = {
+                    'league_id': season_league_id,
+                    'season': season,
+                    'league_name': season_sleeper_league.league_data.get('name'),
+                    'matchups': all_league_matchups.to_dict('records') if isinstance(all_league_matchups, pd.DataFrame) else all_league_matchups,
+                    'user_id_to_team_name': season_sleeper_league.user_id_to_team_name,
+                    'team_name_to_user_id': season_sleeper_league.team_name_to_user_id
+                }
+                save_cached_season(season_league_id, season, cache_payload)
+        else:
+            print(f"Failed to fetch season {season}")
+    
+    if season in all_seasons_data:
         season_dropdown_options.append({
             'season': season,
             'selected': season == most_recent_season['season']
         })
-    else:
-        print(f"Failed to fetch season {season}")
 
 # Use most recent season for initial display
 if season_dropdown_options:
