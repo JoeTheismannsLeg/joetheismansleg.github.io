@@ -24,7 +24,7 @@ jobs:
 
       - name: Generate index.html using Python
         # run: python generate_site.py
-        run: python generate_atchup_table.py
+        run: python generate_matchup_table.py
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
