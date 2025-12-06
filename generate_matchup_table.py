@@ -223,95 +223,173 @@ class SleeperLeague:
 
 my_league_id = '1247641515757404160' # Replace with your actual league ID
 current_week = 14 # This can be dynamically determined or set manually
+base_url = 'https://api.sleeper.app/v1'
 
 print(f"Initializing SleeperLeague for league ID: {my_league_id}")
-my_sleeper_league = SleeperLeague(my_league_id)
 
-if my_sleeper_league.league_data:
+# Traverse league history to get all seasons
+league_history = []
+current_league_id = my_league_id
+
+for i in range(20):  # Safety limit
+    try:
+        league_endpoint = f"{base_url}/league/{current_league_id}"
+        league_response = requests.get(league_endpoint)
+        if league_response.status_code != 200:
+            break
+        league_data = league_response.json()
+        
+        season = league_data.get('season')
+        prev_league_id = league_data.get('previous_league_id')
+        
+        league_history.append({
+            'season': season,
+            'league_id': current_league_id
+        })
+        
+        print(f"Found season: {season}")
+        
+        if not prev_league_id:
+            break
+        
+        current_league_id = prev_league_id
+    except Exception as e:
+        print(f"Error fetching league history: {e}")
+        break
+
+# Reverse to have oldest first, but we'll track current season separately
+league_history.reverse()
+most_recent_season = league_history[-1] if league_history else None
+
+print(f"\nLeague history: {[h['season'] for h in league_history]}")
+print(f"Most recent season: {most_recent_season['season'] if most_recent_season else 'Unknown'}")
+
+# Fetch data for all seasons
+all_seasons_data = {}
+season_dropdown_options = []
+
+for season_info in league_history:
+    season = season_info['season']
+    season_league_id = season_info['league_id']
+    
+    print(f"\nFetching data for season {season}...")
+    season_sleeper_league = SleeperLeague(season_league_id)
+    
+    if season_sleeper_league.league_data:
+        all_league_matchups = season_sleeper_league.fetch_all_matchups()
+        all_seasons_data[season] = {
+            'league': season_sleeper_league,
+            'matchups': all_league_matchups,
+            'league_name': season_sleeper_league.league_data.get('name')
+        }
+        season_dropdown_options.append({
+            'season': season,
+            'selected': season == most_recent_season['season']
+        })
+    else:
+        print(f"Failed to fetch season {season}")
+
+# Use most recent season for initial display
+if season_dropdown_options:
+    most_recent_year = max(season_dropdown_options, key=lambda x: int(x['season']))['season']
+else:
+    most_recent_year = None
+
+print(f"\nProcessing {len(all_seasons_data)} seasons for HTML generation...")
+
+if most_recent_year and most_recent_year in all_seasons_data:
+    my_sleeper_league = all_seasons_data[most_recent_year]['league']
+    all_league_matchups = all_seasons_data[most_recent_year]['matchups']
+    
     print(f"\nLeague Name: {my_sleeper_league.league_data.get('name')}")
     print(f"Total Users: {len(my_sleeper_league.user_id_to_name)}")
     print(f"Total Rosters: {len(my_sleeper_league.roster_id_to_user_id)}")
 
-    # Fetch all matchups for all 17 weeks
-    all_league_matchups = my_sleeper_league.fetch_all_matchups()
-
-    # --- Prepare Data for HTML ---
-    weekly_html_tables = {}
-    for week, week_df in all_league_matchups.groupby('Week'):
-        week_df_display = week_df.copy()
-        # Drop the Week column as it's redundant with the dropdown selector
-        week_df_display = week_df_display.drop(columns=['Week'])
-        if 'Matchup ID' in week_df_display.columns:
-            week_df_display['Matchup ID'] = week_df_display['Matchup ID'].astype('Int64')
-
-        # Custom HTML generation with styling
-        html_table = week_df_display.to_html(index=False, classes='matchup-table')
+    # Generate tables for the most recent season first
+    # We'll add all seasons to JavaScript below
+    all_years_weekly_tables = {}  # season -> week -> html
+    
+    for season, season_data in all_seasons_data.items():
+        season_league = season_data['league']
+        season_matchups = season_data['matchups']
         
-        # Add CSS classes to team names and scores for better styling
-        html_table = html_table.replace('<td>', '<td class="cell">')
-        html_table = html_table.replace('<th>', '<th class="header-cell">')
+        weekly_html_tables = {}
+        for week, week_df in season_matchups.groupby('Week'):
+            week_df_display = week_df.copy()
+            # Drop the Week column as it's redundant with the dropdown selector
+            week_df_display = week_df_display.drop(columns=['Week'])
+            if 'Matchup ID' in week_df_display.columns:
+                week_df_display['Matchup ID'] = week_df_display['Matchup ID'].astype('Int64')
+
+            # Custom HTML generation with styling
+            html_table = week_df_display.to_html(index=False, classes='matchup-table')
+            
+            # Add CSS classes to team names and scores for better styling
+            html_table = html_table.replace('<td>', '<td class="cell">')
+            html_table = html_table.replace('<th>', '<th class="header-cell">')
+            
+            # Wrap team names in links to Sleeper user profiles, BEFORE other replacements
+            # Get the list of team names from this week's data to identify them in the HTML
+            team_names_in_week = set()
+            for _, row in week_df_display.iterrows():
+                if pd.notna(row.get('Team 1')) and row['Team 1'] not in ['BYE', 'UNPLAYED/INCOMPLETE']:
+                    team_names_in_week.add(str(row['Team 1']))
+                if pd.notna(row.get('Team 2')) and row['Team 2'] not in ['BYE', 'UNPLAYED/INCOMPLETE']:
+                    team_names_in_week.add(str(row['Team 2']))
+            
+            # Replace each team name with a clickable link to their Sleeper profile
+            for team_name in team_names_in_week:
+                user_id = season_league.team_name_to_user_id.get(team_name)
+                if user_id:
+                    sleeper_user_url = f"https://sleeper.app/user/{user_id}"
+                    old_cell = f'<td class="cell">{team_name}</td>'
+                    new_cell = f'<td class="cell team-name"><a href="{sleeper_user_url}" target="_blank">{team_name}</a></td>'
+                    html_table = html_table.replace(old_cell, new_cell)
+                else:
+                    # Fallback: no link if we can't find the user ID
+                    old_cell = f'<td class="cell">{team_name}</td>'
+                    new_cell = f'<td class="cell team-name">{team_name}</td>'
+                    html_table = html_table.replace(old_cell, new_cell)
+            
+            # Replace column headers with styled versions
+            html_table = html_table.replace('<th class="header-cell">Team 1</th>', '<th class="header-cell team-name">Team 1</th>')
+            html_table = html_table.replace('<th class="header-cell">Team 2</th>', '<th class="header-cell team-name">Team 2</th>')
+            html_table = html_table.replace('<th class="header-cell">Score 1</th>', '<th class="header-cell score">Score 1</th>')
+            html_table = html_table.replace('<th class="header-cell">Score 2</th>', '<th class="header-cell score">Score 2</th>')
+            
+            # Add bye week styling
+            html_table = html_table.replace('>BYE<', ' class="bye-week">BYE<')
+            html_table = html_table.replace('>UNPLAYED/INCOMPLETE<', ' class="bye-week">UNPLAYED/INCOMPLETE<')
+            html_table = html_table.replace('>N/A<', ' class="bye-week">N/A<')
+
+            weekly_html_tables[int(week)] = html_table
         
-        # Wrap team names in links to Sleeper user profiles, BEFORE other replacements
-        # Get the list of team names from this week's data to identify them in the HTML
-        team_names_in_week = set()
-        for _, row in week_df_display.iterrows():
-            if pd.notna(row.get('Team 1')) and row['Team 1'] not in ['BYE', 'UNPLAYED/INCOMPLETE']:
-                team_names_in_week.add(str(row['Team 1']))
-            if pd.notna(row.get('Team 2')) and row['Team 2'] not in ['BYE', 'UNPLAYED/INCOMPLETE']:
-                team_names_in_week.add(str(row['Team 2']))
-        
-        # Replace each team name with a clickable link to their Sleeper profile
-        for team_name in team_names_in_week:
-            user_id = my_sleeper_league.team_name_to_user_id.get(team_name)
-            if user_id:
-                sleeper_user_url = f"https://sleeper.app/user/{user_id}"
-                old_cell = f'<td class="cell">{team_name}</td>'
-                new_cell = f'<td class="cell team-name"><a href="{sleeper_user_url}" target="_blank">{team_name}</a></td>'
-                html_table = html_table.replace(old_cell, new_cell)
-            else:
-                # Fallback: no link if we can't find the user ID
-                old_cell = f'<td class="cell">{team_name}</td>'
-                new_cell = f'<td class="cell team-name">{team_name}</td>'
-                html_table = html_table.replace(old_cell, new_cell)
-        
-        # Replace column headers with styled versions
-        html_table = html_table.replace('<th class="header-cell">Team 1</th>', '<th class="header-cell team-name">Team 1</th>')
-        html_table = html_table.replace('<th class="header-cell">Team 2</th>', '<th class="header-cell team-name">Team 2</th>')
-        html_table = html_table.replace('<th class="header-cell">Score 1</th>', '<th class="header-cell score">Score 1</th>')
-        html_table = html_table.replace('<th class="header-cell">Score 2</th>', '<th class="header-cell score">Score 2</th>')
-        
-        # Add bye week styling
-        html_table = html_table.replace('>BYE<', ' class="bye-week">BYE<')
-        html_table = html_table.replace('>UNPLAYED/INCOMPLETE<', ' class="bye-week">UNPLAYED/INCOMPLETE<')
-        html_table = html_table.replace('>N/A<', ' class="bye-week">N/A<')
+        all_years_weekly_tables[season] = weekly_html_tables
+        print(f"Generated {len(weekly_html_tables)} HTML tables for season {season}")
 
-        weekly_html_tables[int(week)] = html_table
+        # Dynamically determine the active week for display for this season
+        dynamic_current_week = 1 # Default to week 1 if no other week is found
 
-    print(f"Generated {len(weekly_html_tables)} HTML tables for different weeks.")
+        all_present_weeks = sorted(season_matchups['Week'].unique())
 
-    # Dynamically determine the active week for display
-    dynamic_current_week = 1 # Default to week 1 if no other week is found
+        for week in reversed(all_present_weeks):
+            week_data = season_matchups[season_matchups['Week'] == week]
 
-    all_present_weeks = sorted(all_league_matchups['Week'].unique())
+            # Condition 1: Check if this week contains any matchup that is NOT 'UNPLAYED/INCOMPLETE'
+            has_some_real_matchups = not (week_data['Team 2'] == 'UNPLAYED/INCOMPLETE').all()
 
-    for week in reversed(all_present_weeks):
-        week_data = all_league_matchups[all_league_matchups['Week'] == week]
+            if has_some_real_matchups:
+                # Condition 2: Check if there's any non-zero score in this week
+                scores1_numeric = pd.to_numeric(week_data['Score 1'], errors='coerce')
+                scores2_numeric = pd.to_numeric(week_data['Score 2'], errors='coerce')
 
-        # Condition 1: Check if this week contains any matchup that is NOT 'UNPLAYED/INCOMPLETE'
-        has_some_real_matchups = not (week_data['Team 2'] == 'UNPLAYED/INCOMPLETE').all()
+                has_non_zero_scores = (scores1_numeric > 0).any() or (scores2_numeric > 0).any()
 
-        if has_some_real_matchups:
-            # Condition 2: Check if there's any non-zero score in this week
-            scores1_numeric = pd.to_numeric(week_data['Score 1'], errors='coerce')
-            scores2_numeric = pd.to_numeric(week_data['Score 2'], errors='coerce')
-
-            has_non_zero_scores = (scores1_numeric > 0).any() or (scores2_numeric > 0).any()
-
-            if has_non_zero_scores:
-                dynamic_current_week = week
-                break # Found the active week with actual scores
-            else:
-                print(f"DEBUG: Week {week} has real matchups but all scores are zero. Skipping for active week determination.")
+                if has_non_zero_scores:
+                    dynamic_current_week = week
+                    break # Found the active week with actual scores
+                else:
+                    print(f"DEBUG: Week {week} has real matchups but all scores are zero. Skipping for active week determination.")
 
     active_week_for_display = dynamic_current_week
     print(f"Dynamically determined active week for display: {active_week_for_display}")
@@ -491,6 +569,8 @@ if my_sleeper_league.league_data:
     <div class="container">
         <h1>JTL Weekly Matchups</h1>
         <div class="controls">
+            <label for="yearSelector">Select Year:</label>
+            <select id="yearSelector"></select>
             <label for="weekSelector">Select Week:</label>
             <select id="weekSelector"></select>
         </div>
@@ -504,38 +584,65 @@ if my_sleeper_league.league_data:
     # --- Implement JavaScript for Dynamic Display ---
     js_code = f"""
 <script>
-    const weeklyHtmlTables = {json.dumps(weekly_html_tables)};
+    const allSeasonsWeeklyTables = {json.dumps(all_years_weekly_tables)};
     const lastScoredWeek = {active_week_for_display};
+    const mostRecentSeason = '{most_recent_season['season']}';
 
+    const yearSelector = document.getElementById('yearSelector');
     const weekSelector = document.getElementById('weekSelector');
     const matchupContainer = document.getElementById('matchupContainer');
 
-    // Populate the dropdown
-    for (const week in weeklyHtmlTables) {{
+    // Populate year dropdown
+    for (const season in allSeasonsWeeklyTables) {{
         const option = document.createElement('option');
-        option.value = week;
-        option.textContent = `Week ${{week}}`;
-        if (parseInt(week) === lastScoredWeek) {{
+        option.value = season;
+        option.textContent = `{'{'}${'{season}'}{'}'} Season`;
+        if (season === mostRecentSeason) {{
             option.selected = true;
         }}
-        weekSelector.appendChild(option);
+        yearSelector.appendChild(option);
+    }}
+
+    // Function to update weeks when year changes
+    function updateWeekSelector() {{
+        weekSelector.innerHTML = '';  // Clear existing options
+        const selectedYear = yearSelector.value;
+        const weeksForSeason = allSeasonsWeeklyTables[selectedYear];
+        
+        const weeks = Object.keys(weeksForSeason).map(w => parseInt(w)).sort((a, b) => a - b);
+        
+        for (const week of weeks) {{
+            const option = document.createElement('option');
+            option.value = week;
+            option.textContent = `Week ${{week}}`;
+            if (parseInt(week) === lastScoredWeek && selectedYear === mostRecentSeason) {{
+                option.selected = true;
+            }}
+            weekSelector.appendChild(option);
+        }}
+        
+        // Display first available week
+        displayWeekMatchups();
     }}
 
     // Function to display the selected week's matchups
     function displayWeekMatchups() {{
+        const selectedYear = yearSelector.value;
         const selectedWeek = weekSelector.value;
-        if (weeklyHtmlTables[selectedWeek]) {{
-            matchupContainer.innerHTML = weeklyHtmlTables[selectedWeek];
+        
+        if (allSeasonsWeeklyTables[selectedYear] && allSeasonsWeeklyTables[selectedYear][selectedWeek]) {{
+            matchupContainer.innerHTML = allSeasonsWeeklyTables[selectedYear][selectedWeek];
         }} else {{
-            matchupContainer.innerHTML = `<p>No matchups found for Week ${{selectedWeek}}.</p>`;
+            matchupContainer.innerHTML = `<p>No matchups found for Week ${{selectedWeek}} in {'{'}${{selectedYear}}{'}'}.</p>`;
         }}
     }}
 
-    // Attach event listener
+    // Attach event listeners
+    yearSelector.addEventListener('change', updateWeekSelector);
     weekSelector.addEventListener('change', displayWeekMatchups);
 
-    // Display initial week's matchups
-    displayWeekMatchups();
+    // Initialize on page load
+    updateWeekSelector();
 </script>
 """
     html_content = html_content.replace('</body>', f'{js_code}\n</body>')
