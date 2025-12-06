@@ -61,6 +61,115 @@ def save_cached_season(league_id: str, season: str, data: dict):
     except Exception as e:
         print(f"Warning: Could not save cache for season {season}: {e}")
 
+def calculate_standings(matchups_df: pd.DataFrame) -> pd.DataFrame:
+    """Calculate win-loss records and points for/against for each team."""
+    if matchups_df.empty:
+        return pd.DataFrame()
+    
+    standings = {}
+    
+    for _, row in matchups_df.iterrows():
+        team1 = row.get('Team 1')
+        team2 = row.get('Team 2')
+        score1 = pd.to_numeric(row.get('Score 1'), errors='coerce')
+        score2 = pd.to_numeric(row.get('Score 2'), errors='coerce')
+        
+        # Skip bye weeks and incomplete matchups
+        if team1 in ['BYE', 'UNPLAYED/INCOMPLETE'] or team2 in ['BYE', 'UNPLAYED/INCOMPLETE']:
+            continue
+        if pd.isna(score1) or pd.isna(score2):
+            continue
+        
+        # Initialize teams
+        if team1 not in standings:
+            standings[team1] = {'wins': 0, 'losses': 0, 'pf': 0, 'pa': 0}
+        if team2 not in standings:
+            standings[team2] = {'wins': 0, 'losses': 0, 'pf': 0, 'pa': 0}
+        
+        # Update records
+        standings[team1]['pf'] += score1
+        standings[team1]['pa'] += score2
+        standings[team2]['pf'] += score2
+        standings[team2]['pa'] += score1
+        
+        if score1 > score2:
+            standings[team1]['wins'] += 1
+            standings[team2]['losses'] += 1
+        elif score2 > score1:
+            standings[team2]['wins'] += 1
+            standings[team1]['losses'] += 1
+    
+    # Convert to DataFrame
+    standings_list = []
+    for team, record in standings.items():
+        wins = record['wins']
+        losses = record['losses']
+        pf = round(record['pf'], 2)
+        pa = round(record['pa'], 2)
+        win_pct = wins / (wins + losses) if (wins + losses) > 0 else 0
+        standings_list.append({
+            'Team': team,
+            'W': wins,
+            'L': losses,
+            'W%': round(win_pct, 3),
+            'PF': pf,
+            'PA': pa
+        })
+    
+    if standings_list:
+        return pd.DataFrame(standings_list).sort_values('W', ascending=False).reset_index(drop=True)
+    return pd.DataFrame()
+
+def calculate_season_stats(matchups_df: pd.DataFrame) -> dict:
+    """Calculate overall season statistics."""
+    if matchups_df.empty:
+        return {}
+    
+    # Filter out incomplete matchups
+    valid_matchups = matchups_df[
+        (matchups_df['Team 2'] != 'UNPLAYED/INCOMPLETE') &
+        (matchups_df['Team 2'] != 'BYE')
+    ].copy()
+    
+    if valid_matchups.empty:
+        return {}
+    
+    # Convert scores to numeric
+    valid_matchups['Score 1'] = pd.to_numeric(valid_matchups['Score 1'], errors='coerce')
+    valid_matchups['Score 2'] = pd.to_numeric(valid_matchups['Score 2'], errors='coerce')
+    valid_matchups = valid_matchups.dropna(subset=['Score 1', 'Score 2'])
+    
+    all_scores = pd.concat([valid_matchups['Score 1'], valid_matchups['Score 2']])
+    
+    if all_scores.empty:
+        return {}
+    
+    return {
+        'total_matchups': len(valid_matchups),
+        'avg_points': round(all_scores.mean(), 2),
+        'highest_score': round(all_scores.max(), 2),
+        'lowest_score': round(all_scores.min(), 2),
+        'highest_matchup': {
+            'teams': None,
+            'score': 0
+        }
+    }
+
+def determine_matchup_winner(score1, score2):
+    """Determine winner between two scores."""
+    s1 = pd.to_numeric(score1, errors='coerce')
+    s2 = pd.to_numeric(score2, errors='coerce')
+    
+    if pd.isna(s1) or pd.isna(s2):
+        return None
+    
+    if s1 > s2:
+        return 1
+    elif s2 > s1:
+        return 2
+    else:
+        return 0  # Tie
+
 class SleeperLeague:
     """
     A class to interact with the Sleeper API for a specific fantasy football league.
@@ -443,10 +552,28 @@ if most_recent_year and most_recent_year in all_seasons_data:
     # Generate tables for the most recent season first
     # We'll add all seasons to JavaScript below
     all_years_weekly_tables = {}  # season -> week -> html
+    all_years_standings = {}  # season -> standings html
+    all_years_stats = {}  # season -> stats data
     
     for season, season_data in all_seasons_data.items():
         season_league = season_data['league']
         season_matchups = season_data['matchups']
+        
+        # Calculate standings and stats for this season
+        standings_df = calculate_standings(season_matchups)
+        stats_dict = calculate_season_stats(season_matchups)
+        
+        # Store stats for JavaScript
+        all_years_stats[season] = stats_dict
+        
+        # Generate standings table HTML
+        if not standings_df.empty:
+            standings_html = standings_df.to_html(index=False, classes='standings-table')
+            standings_html = standings_html.replace('<td>', '<td class="cell">')
+            standings_html = standings_html.replace('<th>', '<th class="header-cell">')
+            all_years_standings[season] = f'<h3 class="standings-title">{season} Season Standings</h3>{standings_html}'
+        else:
+            all_years_standings[season] = '<p>No standings data available yet.</p>'
         
         weekly_html_tables = {}
         for week, week_df in season_matchups.groupby('Week'):
@@ -463,6 +590,42 @@ if most_recent_year and most_recent_year in all_seasons_data:
             html_table = html_table.replace('<td>', '<td class="cell">')
             html_table = html_table.replace('<th>', '<th class="header-cell">')
             
+            # Add winner highlighting for completed matchups
+            for idx, row in week_df_display.iterrows():
+                team1 = row.get('Team 1')
+                team2 = row.get('Team 2')
+                score1 = row.get('Score 1')
+                score2 = row.get('Score 2')
+                
+                # Only highlight if it's a real matchup (not bye/incomplete)
+                if team1 not in ['BYE', 'UNPLAYED/INCOMPLETE'] and team2 not in ['BYE', 'UNPLAYED/INCOMPLETE']:
+                    winner = determine_matchup_winner(score1, score2)
+                    
+                    if winner == 1:  # Team 1 wins
+                        # Highlight team 1 and score 1
+                        html_table = html_table.replace(
+                            f'<td class="cell team-name">{team1}</td>',
+                            f'<td class="cell team-name winner">🏆 {team1}</td>',
+                            1
+                        )
+                        html_table = html_table.replace(
+                            f'<td class="cell">{score1}</td>',
+                            f'<td class="cell winner-score">{score1}</td>',
+                            1
+                        )
+                    elif winner == 2:  # Team 2 wins
+                        # Highlight team 2 and score 2
+                        html_table = html_table.replace(
+                            f'<td class="cell team-name">{team2}</td>',
+                            f'<td class="cell team-name winner">🏆 {team2}</td>',
+                            1
+                        )
+                        html_table = html_table.replace(
+                            f'<td class="cell">{score2}</td>',
+                            f'<td class="cell winner-score">{score2}</td>',
+                            1
+                        )
+            
             # Wrap team names in links to Sleeper user profiles, BEFORE other replacements
             # Get the list of team names from this week's data to identify them in the HTML
             team_names_in_week = set()
@@ -475,16 +638,34 @@ if most_recent_year and most_recent_year in all_seasons_data:
             # Replace each team name with a clickable link to their Sleeper profile
             for team_name in team_names_in_week:
                 user_id = season_league.team_name_to_user_id.get(team_name)
+                # Handle both winner and non-winner cases
+                patterns = [
+                    f'<td class="cell team-name winner">🏆 {team_name}</td>',
+                    f'<td class="cell team-name">{team_name}</td>'
+                ]
+                
                 if user_id:
                     sleeper_user_url = f"https://sleeper.app/user/{user_id}"
-                    old_cell = f'<td class="cell">{team_name}</td>'
-                    new_cell = f'<td class="cell team-name"><a href="{sleeper_user_url}" target="_blank">{team_name}</a></td>'
-                    html_table = html_table.replace(old_cell, new_cell)
-                else:
-                    # Fallback: no link if we can't find the user ID
-                    old_cell = f'<td class="cell">{team_name}</td>'
-                    new_cell = f'<td class="cell team-name">{team_name}</td>'
-                    html_table = html_table.replace(old_cell, new_cell)
+                    for pattern in patterns:
+                        if pattern in html_table:
+                            new_cell = pattern.replace(
+                                f'>{team_name}</a>',
+                                f'><a href="{sleeper_user_url}" target="_blank">{team_name}</a>',
+                                1
+                            )
+                            # Remove old closing tag and add link
+                            new_cell = pattern.replace(
+                                f'>{team_name}<',
+                                f'><a href="{sleeper_user_url}" target="_blank">{team_name.replace("🏆 ", "")}</a><',
+                                1
+                            )
+                            # Simpler approach: wrap in link properly
+                            team_display = f'🏆 {team_name}' if '🏆' in pattern else team_name
+                            if '🏆' in pattern:
+                                new_cell = f'<td class="cell team-name winner"><a href="{sleeper_user_url}" target="_blank">🏆 {team_name}</a></td>'
+                            else:
+                                new_cell = f'<td class="cell team-name"><a href="{sleeper_user_url}" target="_blank">{team_name}</a></td>'
+                            html_table = html_table.replace(pattern, new_cell, 1)
             
             # Replace column headers with styled versions
             html_table = html_table.replace('<th class="header-cell">Team 1</th>', '<th class="header-cell team-name">Team 1</th>')
@@ -690,6 +871,110 @@ if most_recent_year and most_recent_year in all_seasons_data:
             font-style: italic;
         }}
         
+        .winner {{
+            background-color: #fff3cd;
+            font-weight: 700;
+            color: #d50a0a;
+        }}
+        
+        .winner-score {{
+            background-color: #fff3cd;
+            font-weight: 700;
+            color: #d50a0a;
+            font-size: 1.1em;
+        }}
+        
+        .season-stats {{
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-left: 4px solid #d50a0a;
+            border-radius: 4px;
+        }}
+        
+        .season-stats h3 {{
+            color: #013369;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }}
+        
+        .stats-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }}
+        
+        .stat-box {{
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }}
+        
+        .stat-label {{
+            color: #666;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }}
+        
+        .stat-value {{
+            color: #d50a0a;
+            font-size: 1.8em;
+            font-weight: 700;
+        }}
+        
+        .standings-table {{
+            margin: 30px 0;
+            width: 100%;
+        }}
+        
+        .standings-title {{
+            color: #013369;
+            font-size: 1.5em;
+            font-weight: 700;
+            margin: 30px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #d50a0a;
+        }}
+        
+        .info-tabs {{
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }}
+        
+        .tab-button {{
+            padding: 10px 20px;
+            border: 2px solid #013369;
+            background: white;
+            color: #013369;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }}
+        
+        .tab-button.active {{
+            background: #013369;
+            color: white;
+        }}
+        
+        .tab-button:hover {{
+            background: #d50a0a;
+            border-color: #d50a0a;
+            color: white;
+        }}
+        
+        .tab-content {{
+            display: none;
+        }}
+        
+        .tab-content.active {{
+            display: block;
+        }}
+        
         .footer {{
             margin-top: 40px;
             text-align: center;
@@ -709,7 +994,29 @@ if most_recent_year and most_recent_year in all_seasons_data:
             <label for="weekSelector">Select Week:</label>
             <select id="weekSelector"></select>
         </div>
-        <div id="matchupContainer"></div>
+        
+        <!-- Tab buttons for switching views -->
+        <div class="info-tabs">
+            <button class="tab-button active" onclick="switchTab('matchups')">Matchups</button>
+            <button class="tab-button" onclick="switchTab('standings')">Standings</button>
+            <button class="tab-button" onclick="switchTab('stats')">Season Stats</button>
+        </div>
+        
+        <!-- Matchups tab -->
+        <div id="matchups" class="tab-content active">
+            <div id="matchupContainer"></div>
+        </div>
+        
+        <!-- Standings tab -->
+        <div id="standings" class="tab-content">
+            <div id="standingsContainer"></div>
+        </div>
+        
+        <!-- Season Stats tab -->
+        <div id="stats" class="tab-content">
+            <div id="statsContainer"></div>
+        </div>
+        
         <div class="footer">Last Updated: {current_utc_time}</div>
     </div>
 </body>
@@ -720,12 +1027,40 @@ if most_recent_year and most_recent_year in all_seasons_data:
     js_code = f"""
 <script>
     const allSeasonsWeeklyTables = {json.dumps(all_years_weekly_tables)};
+    const allSeasonsStandings = {json.dumps(all_years_standings)};
+    const allSeasonsStats = {json.dumps(all_years_stats)};
     const lastScoredWeek = {active_week_for_display};
     const mostRecentSeason = '{most_recent_season['season']}';
 
     const yearSelector = document.getElementById('yearSelector');
     const weekSelector = document.getElementById('weekSelector');
     const matchupContainer = document.getElementById('matchupContainer');
+    const standingsContainer = document.getElementById('standingsContainer');
+    const statsContainer = document.getElementById('statsContainer');
+
+    // Tab switching function
+    function switchTab(tabName) {{
+        // Hide all tabs
+        const tabs = document.querySelectorAll('.tab-content');
+        tabs.forEach(tab => tab.classList.remove('active'));
+        
+        // Remove active class from all buttons
+        const buttons = document.querySelectorAll('.tab-button');
+        buttons.forEach(btn => btn.classList.remove('active'));
+        
+        // Show selected tab
+        document.getElementById(tabName).classList.add('active');
+        
+        // Highlight clicked button
+        event.target.classList.add('active');
+        
+        // Update standings and stats when those tabs are clicked
+        if (tabName === 'standings') {{
+            displayStandings();
+        }} else if (tabName === 'stats') {{
+            displayStats();
+        }}
+    }}
 
     // Populate year dropdown
     for (const season in allSeasonsWeeklyTables) {{
@@ -775,6 +1110,51 @@ if most_recent_year and most_recent_year in all_seasons_data:
     // Attach event listeners
     yearSelector.addEventListener('change', updateWeekSelector);
     weekSelector.addEventListener('change', displayWeekMatchups);
+
+    // Function to display standings
+    function displayStandings() {{
+        const selectedYear = yearSelector.value;
+        if (allSeasonsStandings[selectedYear]) {{
+            standingsContainer.innerHTML = allSeasonsStandings[selectedYear];
+        }} else {{
+            standingsContainer.innerHTML = '<p>No standings available for this season.</p>';
+        }}
+    }}
+
+    // Function to display season statistics
+    function displayStats() {{
+        const selectedYear = yearSelector.value;
+        const stats = allSeasonsStats[selectedYear];
+        
+        if (!stats || Object.keys(stats).length === 0) {{
+            statsContainer.innerHTML = '<p>No statistics available for this season.</p>';
+            return;
+        }}
+        
+        let statsHtml = `<div class="season-stats">
+            <h3>{'{'}${{selectedYear}}{'}'} Season Statistics</h3>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Total Matchups</div>
+                    <div class="stat-value">${{stats.total_matchups || 0}}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Average Points Per Team</div>
+                    <div class="stat-value">${{stats.avg_points || 'N/A'}}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Highest Score</div>
+                    <div class="stat-value">${{stats.highest_score || 'N/A'}}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Lowest Score</div>
+                    <div class="stat-value">${{stats.lowest_score || 'N/A'}}</div>
+                </div>
+            </div>
+        </div>`;
+        
+        statsContainer.innerHTML = statsHtml;
+    }}
 
     // Initialize on page load
     updateWeekSelector();
