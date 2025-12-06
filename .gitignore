@@ -7,3 +7,6 @@ _site/
 vendor/
 
 .DS_store
+
+# project specific ignores
+index.html

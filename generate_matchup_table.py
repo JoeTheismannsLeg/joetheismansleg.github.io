@@ -16,6 +16,7 @@ class SleeperLeague:
         self.users_data = None
         self.user_id_to_name = {}
         self.roster_id_to_user_id = {}
+        self.roster_id_to_team_name = {}
         print(f"Initializing SleeperLeague for league ID: {self.league_id}")
         self._fetch_base_data()
 
@@ -58,15 +59,25 @@ class SleeperLeague:
             rosters_response.raise_for_status()
             rosters_data = rosters_response.json()
             self.roster_id_to_user_id = {}
+            self.roster_id_to_team_name = {}
             for roster_entry in rosters_data:
                 if roster_entry.get('owner_id'):
                     self.roster_id_to_user_id[roster_entry['roster_id']] = roster_entry['owner_id']
+                    # Extract team name from metadata, fallback to display_name if not available
+                    metadata = roster_entry.get('metadata', {})
+                    team_name = metadata.get('team_name') if metadata else None
+                    if not team_name:
+                        # Fallback to user display name if team_name not set
+                        user_id = roster_entry['owner_id']
+                        team_name = self.user_id_to_name.get(user_id, f"Unknown Team (Roster {roster_entry['roster_id']})")
+                    self.roster_id_to_team_name[roster_entry['roster_id']] = team_name
                 else:
                     print(f"Roster ID {roster_entry['roster_id']} has no owner. Skipping.")
             print(f"Successfully fetched roster data for {len(self.roster_id_to_user_id)} rosters.")
         except requests.exceptions.RequestException as e:
             print(f"Error fetching roster data: {e}")
             self.roster_id_to_user_id = {}
+            self.roster_id_to_team_name = {}
 
         if self.league_data and self.user_id_to_name and self.roster_id_to_user_id:
             print("Base data loaded successfully.")
@@ -75,8 +86,7 @@ class SleeperLeague:
 
     def _get_team_name(self, roster_id: int) -> str:
         """Helper to get team name from roster_id."""
-        user_id = self.roster_id_to_user_id.get(roster_id)
-        return self.user_id_to_name.get(user_id, f"Unknown User (Roster {roster_id})")
+        return self.roster_id_to_team_name.get(roster_id, f"Unknown Team (Roster {roster_id})")
 
     def fetch_weekly_matchups(self, week_number: int) -> pd.DataFrame:
         """
@@ -220,7 +230,25 @@ if my_sleeper_league.league_data:
         if 'Matchup ID' in week_df_display.columns:
             week_df_display['Matchup ID'] = week_df_display['Matchup ID'].astype('Int64')
 
-        weekly_html_tables[int(week)] = week_df_display.to_html(index=False)
+        # Custom HTML generation with styling
+        html_table = week_df_display.to_html(index=False, classes='matchup-table')
+        
+        # Add CSS classes to team names and scores for better styling
+        html_table = html_table.replace('<td>', '<td class="cell">')
+        html_table = html_table.replace('<th>', '<th class="header-cell">')
+        
+        # Replace column headers with styled versions
+        html_table = html_table.replace('<td class="cell">Team 1</td>', '<td class="cell team-name">Team 1</td>')
+        html_table = html_table.replace('<td class="cell">Team 2</td>', '<td class="cell team-name">Team 2</td>')
+        html_table = html_table.replace('<td class="cell">Score 1</td>', '<td class="cell score">Score 1</td>')
+        html_table = html_table.replace('<td class="cell">Score 2</td>', '<td class="cell score">Score 2</td>')
+        
+        # Add bye week styling
+        html_table = html_table.replace('>BYE<', ' class="bye-week">BYE<')
+        html_table = html_table.replace('>UNPLAYED/INCOMPLETE<', ' class="bye-week">UNPLAYED/INCOMPLETE<')
+        html_table = html_table.replace('>N/A<', ' class="bye-week">N/A<')
+
+        weekly_html_tables[int(week)] = html_table
 
     print(f"Generated {len(weekly_html_tables)} HTML tables for different weeks.")
 
@@ -259,14 +287,166 @@ if my_sleeper_league.league_data:
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sleeper League Matchups</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }}
+        
+        .container {{
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }}
+        
+        h1 {{
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }}
+        
+        .controls {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }}
+        
+        label {{
+            font-weight: 600;
+            color: #555;
+            font-size: 1.1em;
+        }}
+        
+        select {{
+            padding: 10px 15px;
+            font-size: 1em;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 150px;
+        }}
+        
+        select:hover {{
+            border-color: #764ba2;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }}
+        
+        select:focus {{
+            outline: none;
+            border-color: #764ba2;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }}
+        
+        #matchupContainer {{
+            margin-top: 30px;
+        }}
+        
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }}
+        
+        thead {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }}
+        
+        th {{
+            padding: 18px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 1.05em;
+            letter-spacing: 0.5px;
+        }}
+        
+        td {{
+            padding: 16px 18px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 1em;
+            color: #333;
+        }}
+        
+        tbody tr {{
+            transition: all 0.2s ease;
+        }}
+        
+        tbody tr:hover {{
+            background-color: #f5f5f5;
+            transform: scale(1.01);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }}
+        
+        tbody tr:last-child td {{
+            border-bottom: none;
+        }}
+        
+        tbody tr:nth-child(odd) {{
+            background-color: #fafafa;
+        }}
+        
+        .team-name {{
+            font-weight: 600;
+            color: #667eea;
+        }}
+        
+        .score {{
+            font-weight: 700;
+            font-size: 1.15em;
+        }}
+        
+        .bye-week {{
+            color: #999;
+            font-style: italic;
+        }}
+        
+        .footer {{
+            margin-top: 40px;
+            text-align: center;
+            color: #888;
+            font-size: 0.9em;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }}
+    </style>
 </head>
 <body>
-    <h1>Sleeper League Matchups</h1>
-    <label for="weekSelector">Select Week:</label>
-    <select id="weekSelector"></select>
-    <div id="matchupContainer"></div>
-    <p>Last Updated: {current_utc_time}</p>
+    <div class="container">
+        <h1>Sleeper League Matchups</h1>
+        <div class="controls">
+            <label for="weekSelector">Select Week:</label>
+            <select id="weekSelector"></select>
+        </div>
+        <div id="matchupContainer"></div>
+        <div class="footer">Last Updated: {current_utc_time}</div>
+    </div>
 </body>
 </html>
 """
