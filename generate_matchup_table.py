@@ -2,6 +2,7 @@ import requests
 import pandas as pd
 import datetime
 import json
+import re
 
 class SleeperLeague:
     """
@@ -16,6 +17,7 @@ class SleeperLeague:
         self.users_data = None
         self.user_id_to_name = {}
         self.user_id_to_team_name = {}
+        self.team_name_to_user_id = {}
         self.roster_id_to_user_id = {}
         self.roster_id_to_team_name = {}
         print(f"Initializing SleeperLeague for league ID: {self.league_id}")
@@ -69,6 +71,7 @@ class SleeperLeague:
             rosters_data = rosters_response.json()
             self.roster_id_to_user_id = {}
             self.roster_id_to_team_name = {}
+            self.team_name_to_user_id = {}
             for roster_entry in rosters_data:
                 if roster_entry.get('owner_id'):
                     user_id = roster_entry['owner_id']
@@ -78,6 +81,8 @@ class SleeperLeague:
                     if not team_name:
                         team_name = self.user_id_to_name.get(user_id, f"Unknown Team (Roster {roster_entry['roster_id']})")
                     self.roster_id_to_team_name[roster_entry['roster_id']] = team_name
+                    # Map team name to user ID for easy lookup
+                    self.team_name_to_user_id[team_name] = user_id
                 else:
                     print(f"Roster ID {roster_entry['roster_id']} has no owner. Skipping.")
             print(f"Successfully fetched roster data for {len(self.roster_id_to_user_id)} rosters.")
@@ -246,11 +251,34 @@ if my_sleeper_league.league_data:
         html_table = html_table.replace('<td>', '<td class="cell">')
         html_table = html_table.replace('<th>', '<th class="header-cell">')
         
+        # Wrap team names in links to Sleeper user profiles, BEFORE other replacements
+        # Get the list of team names from this week's data to identify them in the HTML
+        team_names_in_week = set()
+        for _, row in week_df_display.iterrows():
+            if pd.notna(row.get('Team 1')) and row['Team 1'] not in ['BYE', 'UNPLAYED/INCOMPLETE']:
+                team_names_in_week.add(str(row['Team 1']))
+            if pd.notna(row.get('Team 2')) and row['Team 2'] not in ['BYE', 'UNPLAYED/INCOMPLETE']:
+                team_names_in_week.add(str(row['Team 2']))
+        
+        # Replace each team name with a clickable link to their Sleeper profile
+        for team_name in team_names_in_week:
+            user_id = my_sleeper_league.team_name_to_user_id.get(team_name)
+            if user_id:
+                sleeper_user_url = f"https://sleeper.app/user/{user_id}"
+                old_cell = f'<td class="cell">{team_name}</td>'
+                new_cell = f'<td class="cell team-name"><a href="{sleeper_user_url}" target="_blank">{team_name}</a></td>'
+                html_table = html_table.replace(old_cell, new_cell)
+            else:
+                # Fallback: no link if we can't find the user ID
+                old_cell = f'<td class="cell">{team_name}</td>'
+                new_cell = f'<td class="cell team-name">{team_name}</td>'
+                html_table = html_table.replace(old_cell, new_cell)
+        
         # Replace column headers with styled versions
-        html_table = html_table.replace('<td class="cell">Team 1</td>', '<td class="cell team-name">Team 1</td>')
-        html_table = html_table.replace('<td class="cell">Team 2</td>', '<td class="cell team-name">Team 2</td>')
-        html_table = html_table.replace('<td class="cell">Score 1</td>', '<td class="cell score">Score 1</td>')
-        html_table = html_table.replace('<td class="cell">Score 2</td>', '<td class="cell score">Score 2</td>')
+        html_table = html_table.replace('<th class="header-cell">Team 1</th>', '<th class="header-cell team-name">Team 1</th>')
+        html_table = html_table.replace('<th class="header-cell">Team 2</th>', '<th class="header-cell team-name">Team 2</th>')
+        html_table = html_table.replace('<th class="header-cell">Score 1</th>', '<th class="header-cell score">Score 1</th>')
+        html_table = html_table.replace('<th class="header-cell">Score 2</th>', '<th class="header-cell score">Score 2</th>')
         
         # Add bye week styling
         html_table = html_table.replace('>BYE<', ' class="bye-week">BYE<')
@@ -298,7 +326,7 @@ if my_sleeper_league.league_data:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sleeper League Matchups</title>
+    <title>JTL Weekly Matchups</title>
     <style>
         * {{
             margin: 0;
@@ -426,6 +454,19 @@ if my_sleeper_league.league_data:
             color: #013369;
         }}
         
+        .team-name a {{
+            color: #013369;
+            text-decoration: none;
+            border-bottom: 2px solid #d50a0a;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }}
+        
+        .team-name a:hover {{
+            color: #d50a0a;
+            border-bottom-color: #013369;
+        }}
+        
         .score {{
             font-weight: 700;
             font-size: 1.15em;
@@ -448,7 +489,7 @@ if my_sleeper_league.league_data:
 </head>
 <body>
     <div class="container">
-        <h1>Sleeper League Matchups</h1>
+        <h1>JTL Weekly Matchups</h1>
         <div class="controls">
             <label for="weekSelector">Select Week:</label>
             <select id="weekSelector"></select>
