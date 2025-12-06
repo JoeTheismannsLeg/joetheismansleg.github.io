@@ -15,6 +15,7 @@ class SleeperLeague:
         self.league_data = None
         self.users_data = None
         self.user_id_to_name = {}
+        self.user_id_to_team_name = {}
         self.roster_id_to_user_id = {}
         self.roster_id_to_team_name = {}
         print(f"Initializing SleeperLeague for league ID: {self.league_id}")
@@ -46,11 +47,19 @@ class SleeperLeague:
             user_response.raise_for_status()
             self.users_data = user_response.json()
             self.user_id_to_name = {user['user_id']: user['display_name'] for user in self.users_data}
+            # Also store team names from user metadata
+            self.user_id_to_team_name = {}
+            for user in self.users_data:
+                metadata = user.get('metadata', {})
+                team_name = metadata.get('team_name') if metadata else None
+                if team_name:
+                    self.user_id_to_team_name[user['user_id']] = team_name
             print(f"Successfully fetched user data for {len(self.user_id_to_name)} users.")
         except requests.exceptions.RequestException as e:
             print(f"Error fetching user data: {e}")
             self.users_data = None
             self.user_id_to_name = {}
+            self.user_id_to_team_name = {}
 
         # 3. Fetch roster data
         rosters_endpoint = f"{self.base_url}/league/{self.league_id}/rosters"
@@ -62,13 +71,11 @@ class SleeperLeague:
             self.roster_id_to_team_name = {}
             for roster_entry in rosters_data:
                 if roster_entry.get('owner_id'):
-                    self.roster_id_to_user_id[roster_entry['roster_id']] = roster_entry['owner_id']
-                    # Extract team name from metadata, fallback to display_name if not available
-                    metadata = roster_entry.get('metadata', {})
-                    team_name = metadata.get('team_name') if metadata else None
+                    user_id = roster_entry['owner_id']
+                    self.roster_id_to_user_id[roster_entry['roster_id']] = user_id
+                    # Get team name from user metadata, fallback to display name
+                    team_name = self.user_id_to_team_name.get(user_id)
                     if not team_name:
-                        # Fallback to user display name if team_name not set
-                        user_id = roster_entry['owner_id']
                         team_name = self.user_id_to_name.get(user_id, f"Unknown Team (Roster {roster_entry['roster_id']})")
                     self.roster_id_to_team_name[roster_entry['roster_id']] = team_name
                 else:
@@ -227,6 +234,8 @@ if my_sleeper_league.league_data:
     weekly_html_tables = {}
     for week, week_df in all_league_matchups.groupby('Week'):
         week_df_display = week_df.copy()
+        # Drop the Week column as it's redundant with the dropdown selector
+        week_df_display = week_df_display.drop(columns=['Week'])
         if 'Matchup ID' in week_df_display.columns:
             week_df_display['Matchup ID'] = week_df_display['Matchup ID'].astype('Int64')
 
@@ -299,7 +308,7 @@ if my_sleeper_league.league_data:
         
         body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #013369 0%, #1a4d8f 100%);
             min-height: 100vh;
             padding: 20px;
         }}
@@ -314,11 +323,11 @@ if my_sleeper_league.league_data:
         }}
         
         h1 {{
-            color: #333;
+            color: #013369;
             margin-bottom: 30px;
             text-align: center;
             font-size: 2.5em;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #013369 0%, #d50a0a 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -342,7 +351,7 @@ if my_sleeper_league.league_data:
         select {{
             padding: 10px 15px;
             font-size: 1em;
-            border: 2px solid #667eea;
+            border: 2px solid #013369;
             border-radius: 8px;
             background: white;
             cursor: pointer;
@@ -351,14 +360,14 @@ if my_sleeper_league.league_data:
         }}
         
         select:hover {{
-            border-color: #764ba2;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+            border-color: #d50a0a;
+            box-shadow: 0 4px 12px rgba(213, 10, 10, 0.2);
         }}
         
         select:focus {{
             outline: none;
-            border-color: #764ba2;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: #d50a0a;
+            box-shadow: 0 0 0 3px rgba(213, 10, 10, 0.1);
         }}
         
         #matchupContainer {{
@@ -375,7 +384,7 @@ if my_sleeper_league.league_data:
         }}
         
         thead {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #013369 0%, #d50a0a 100%);
             color: white;
         }}
         
@@ -414,7 +423,7 @@ if my_sleeper_league.league_data:
         
         .team-name {{
             font-weight: 600;
-            color: #667eea;
+            color: #013369;
         }}
         
         .score {{
