@@ -9,8 +9,13 @@ from .exceptions import (
     ConfigurationError,
 )
 from .models import TeamRecord, SeasonStats, Matchup, LeagueInfo, LuckStats
-from .client import SleeperLeagueClient
-from .stats import (
+
+# Data layer imports
+from .data.client import SleeperLeagueClient
+from .data.league import SleeperLeague
+
+# Calculations layer imports
+from .calculations import (
     calculate_standings,
     calculate_season_stats,
     determine_matchup_winner,
@@ -18,7 +23,9 @@ from .stats import (
     calculate_cumulative_luck_stats,
     luck_stats_to_dataframe,
 )
-from .html import generate_html
+
+# UI layer imports
+from .ui import generate_html
 
 __version__ = "2.0.0"
 __all__ = [

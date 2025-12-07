@@ -7,7 +7,7 @@ from datetime import datetime
 import pandas as pd
 from jinja2 import Template
 
-from .models import Matchup, TeamRecord
+from ..models import Matchup, TeamRecord
 
 logger = logging.getLogger(__name__)
 

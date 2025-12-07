@@ -1,25 +1,21 @@
-"""Enhanced Sleeper League API wrapper with modern Python features."""
+"""Modern Sleeper League API wrapper with improved error handling and type hints."""
 
 import logging
 from typing import Dict, List, Optional
-from pathlib import Path
 
 import requests
 import pandas as pd
 
-from .config import LeagueConfig
-from .exceptions import APIError, DataValidationError
-from .models import Matchup, LeagueInfo, TeamRecord
+from ..config import LeagueConfig
+from ..exceptions import APIError
+from ..models import Matchup, LeagueInfo
 
 logger = logging.getLogger(__name__)
 
 
-class SleeperLeagueClient:
+class SleeperLeague:
     """
     Modern Sleeper API client with improved error handling and type hints.
-    
-    This is an improved version of SleeperLeague with better architecture,
-    logging, and error handling.
     """
 
     def __init__(self, config: LeagueConfig) -> None:
@@ -30,17 +26,17 @@ class SleeperLeagueClient:
             config: LeagueConfig instance with API settings
             
         Raises:
-            ValueError: If config is invalid
+            APIError: If base data cannot be fetched
         """
         self.config = config
         self.session = requests.Session()
         self.session.timeout = config.request_timeout
         
         self.league_info: Optional[LeagueInfo] = None
-        self.users_mapping: Dict[str, str] = {}  # user_id -> team_name
-        self.rosters_mapping: Dict[int, str] = {}  # roster_id -> team_name
+        self.users_mapping: Dict[str, str] = {}
+        self.rosters_mapping: Dict[int, str] = {}
         
-        logger.info(f"Initialized SleeperLeagueClient for league {config.league_id}")
+        logger.info(f"Initialized SleeperLeague for league {config.league_id}")
         self._fetch_base_data()
 
     def _api_call(self, endpoint: str) -> Dict:
@@ -136,7 +132,7 @@ class SleeperLeagueClient:
         
         return matchups
 
-    def fetch_season_matchups(self, weeks: int = 17) -> List[Matchup]:
+    def fetch_all_matchups(self, weeks: int = 17) -> List[Matchup]:
         """
         Fetch all matchups for the season.
         

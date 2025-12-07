@@ -3,7 +3,7 @@
 from typing import List, Dict, Tuple
 import pandas as pd
 
-from .models import Matchup, TeamRecord, SeasonStats, LuckStats
+from ..models import Matchup, TeamRecord, SeasonStats, LuckStats
 
 
 def calculate_standings(matchups: List[Matchup]) -> List[TeamRecord]:
@@ -295,4 +295,3 @@ def luck_stats_to_dataframe(luck_stats: List[Dict]) -> pd.DataFrame:
         return pd.DataFrame()
     
     return pd.DataFrame(luck_stats)
-
