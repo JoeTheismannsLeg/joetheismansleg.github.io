@@ -585,8 +585,8 @@ def generate_html(
                 stats_by_week[week].append(stat)
             stats_table_data[year] = stats_by_week
     
-    # Get all available years
-    all_years = sorted(stats_table_data.keys(), reverse=True)
+    # Get all available years and ensure they're all integers
+    all_years = sorted([int(year) for year in stats_table_data.keys()], reverse=True)
     if not all_years:
         all_years = [season]
     

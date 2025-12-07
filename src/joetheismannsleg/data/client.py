@@ -155,6 +155,138 @@ class LeagueClient:
         logger.info(f"Fetched {len(all_matchups)} total matchups for {weeks} weeks")
         return all_matchups
 
+    def get_available_seasons(self) -> List[int]:
+        """
+        Get all available seasons for the league by traversing league history.
+        
+        Sleeper creates a new league ID for each season, linked via previous_league_id.
+        This method traverses backwards through the chain to find all historical seasons.
+        
+        Returns:
+            List of season years in descending order (newest first)
+        """
+        try:
+            available_seasons: List[int] = []
+            current_league_id = self.config.league_id
+            
+            # Traverse backwards through league history
+            max_iterations = 20  # Prevent infinite loops
+            iterations = 0
+            
+            while current_league_id and iterations < max_iterations:
+                try:
+                    endpoint = f"/league/{current_league_id}"
+                    data = self._api_call(endpoint)
+                    season = data.get('season')
+                    
+                    if season:
+                        # Ensure season is an int
+                        season_int = int(season) if isinstance(season, str) else season
+                        available_seasons.append(season_int)
+                        logger.debug(f"Found season: {season_int} (league_id: {current_league_id})")
+                    
+                    # Move to previous season's league
+                    current_league_id = data.get('previous_league_id')
+                    iterations += 1
+                    
+                except APIError as e:
+                    logger.warning(f"Error fetching league {current_league_id}: {e}")
+                    break
+            
+            # Return in descending order (newest seasons first)
+            return sorted(available_seasons, reverse=True)
+            
+        except Exception as e:
+            logger.warning(f"Failed to fetch available seasons: {e}")
+            return [2025]  # Return current year as fallback
+
+    def fetch_season_matchups_for_year(self, season: int, weeks: int = 17) -> List[Matchup]:
+        """
+        Fetch all matchups for a specific season year.
+        
+        This method traverses the league history to find the correct league_id for the season,
+        then fetches matchups from that league.
+        
+        Args:
+            season: Season year to fetch
+            weeks: Number of weeks to fetch (default 17)
+            
+        Returns:
+            List of all Matchup objects for that season
+        """
+        logger.info(f"Fetching matchups for {season} season")
+        
+        # Find the league_id for this season
+        target_league_id = self._find_league_id_for_season(season)
+        if not target_league_id:
+            logger.warning(f"Could not find league for season {season}")
+            return []
+        
+        logger.debug(f"Using league_id {target_league_id} for season {season}")
+        
+        # Temporarily store original league_id and switch to target
+        original_league_id = self.config.league_id
+        self.config.league_id = target_league_id
+        
+        all_matchups: List[Matchup] = []
+        
+        try:
+            for week in range(1, weeks + 1):
+                try:
+                    matchups = self.fetch_week_matchups(week)
+                    all_matchups.extend(matchups)
+                except APIError as e:
+                    logger.debug(f"Failed to fetch week {week} for season {season}: {e}")
+                    continue
+            
+            logger.info(f"Fetched {len(all_matchups)} total matchups for {season} season")
+            
+        finally:
+            # Restore original league_id
+            self.config.league_id = original_league_id
+        
+        return all_matchups
+    
+    def _find_league_id_for_season(self, target_season: int) -> Optional[str]:
+        """
+        Find the league_id for a specific season by traversing league history.
+        
+        Args:
+            target_season: The season year to find
+            
+        Returns:
+            The league_id for that season, or None if not found
+        """
+        try:
+            current_league_id = self.config.league_id
+            max_iterations = 20
+            iterations = 0
+            
+            while current_league_id and iterations < max_iterations:
+                try:
+                    endpoint = f"/league/{current_league_id}"
+                    data = self._api_call(endpoint)
+                    season = data.get('season')
+                    
+                    # Convert season to int for comparison
+                    if season:
+                        season_int = int(season) if isinstance(season, str) else season
+                        if season_int == target_season:
+                            return current_league_id
+                    
+                    # Move to previous season's league
+                    current_league_id = data.get('previous_league_id')
+                    iterations += 1
+                    
+                except APIError:
+                    break
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error finding league for season {target_season}: {e}")
+            return None
+
     @staticmethod
     def _group_matchups(matchup_data: List[Dict]) -> Dict[Optional[int], List[Dict]]:
         """Group matchups by matchup_id."""
