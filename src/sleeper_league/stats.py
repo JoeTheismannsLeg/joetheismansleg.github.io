@@ -1,9 +1,9 @@
 """Statistics calculation module."""
 
-from typing import List
+from typing import List, Dict, Tuple
 import pandas as pd
 
-from .models import Matchup, TeamRecord, SeasonStats
+from .models import Matchup, TeamRecord, SeasonStats, LuckStats
 
 
 def calculate_standings(matchups: List[Matchup]) -> List[TeamRecord]:
@@ -101,3 +101,198 @@ def determine_matchup_winner(matchup: Matchup) -> int:
         1 if team 1 wins, 2 if team 2 wins, 0 if tie/incomplete
     """
     return matchup.winner()
+
+
+def calculate_luck_stats(matchups: List[Matchup]) -> List[LuckStats]:
+    """
+    Calculate "Behind the Cue Ball" luck statistics.
+    
+    For each team, each week calculates:
+    - Actual record from real matchups
+    - True record if they played all other teams that week
+    - Luck factor (actual win % - true win %)
+    
+    Args:
+        matchups: List of Matchup objects
+        
+    Returns:
+        List of LuckStats objects
+    """
+    # Filter valid matchups only
+    valid_matchups = [m for m in matchups if not m.is_bye() and not m.is_incomplete()]
+    
+    # Group matchups by week
+    matchups_by_week: Dict[int, List[Matchup]] = {}
+    for m in valid_matchups:
+        if m.week not in matchups_by_week:
+            matchups_by_week[m.week] = []
+        matchups_by_week[m.week].append(m)
+    
+    # Get all teams
+    all_teams = set()
+    for m in valid_matchups:
+        all_teams.add(m.team_1)
+        all_teams.add(m.team_2)
+    
+    luck_stats_list = []
+    
+    # Calculate for each week
+    for week in sorted(matchups_by_week.keys()):
+        week_matchups = matchups_by_week[week]
+        
+        # Get team scores for this week
+        team_scores: Dict[str, float] = {}
+        for m in week_matchups:
+            team_scores[m.team_1] = m.score_1
+            team_scores[m.team_2] = m.score_2
+        
+        # Calculate stats for each team
+        for team in all_teams:
+            if team not in team_scores:
+                continue
+            
+            team_score = team_scores[team]
+            
+            # Calculate actual record (from real matchups)
+            actual_wins = 0
+            actual_losses = 0
+            
+            for m in week_matchups:
+                if m.team_1 == team:
+                    if m.score_1 > m.score_2:
+                        actual_wins += 1
+                    else:
+                        actual_losses += 1
+                elif m.team_2 == team:
+                    if m.score_2 > m.score_1:
+                        actual_wins += 1
+                    else:
+                        actual_losses += 1
+            
+            # Calculate true record (if played all other teams)
+            true_wins = 0
+            true_losses = 0
+            
+            for other_team in all_teams:
+                if other_team == team:
+                    continue
+                
+                if other_team in team_scores:
+                    if team_score > team_scores[other_team]:
+                        true_wins += 1
+                    else:
+                        true_losses += 1
+            
+            # Create LuckStats object
+            luck_stat = LuckStats(
+                team=team,
+                week=week,
+                actual_wins=actual_wins,
+                actual_losses=actual_losses,
+                true_wins=true_wins,
+                true_losses=true_losses,
+            )
+            
+            luck_stats_list.append(luck_stat)
+    
+    return luck_stats_list
+
+
+def calculate_cumulative_luck_stats(matchups: List[Matchup]) -> List[Dict]:
+    """
+    Calculate cumulative "Behind the Cue Ball" stats season-to-date.
+    
+    For each team, for each week, calculates cumulative stats from week 1 to that week.
+    Also includes week-only stats for comparison.
+    
+    Args:
+        matchups: List of Matchup objects
+        
+    Returns:
+        List of dictionaries with cumulative and weekly stats
+    """
+    # Get weekly luck stats first
+    weekly_stats = calculate_luck_stats(matchups)
+    
+    # Group by team and week
+    stats_by_team_week: Dict[Tuple[str, int], LuckStats] = {}
+    for stat in weekly_stats:
+        stats_by_team_week[(stat.team, stat.week)] = stat
+    
+    # Get all teams and weeks
+    all_teams = set()
+    all_weeks = set()
+    for stat in weekly_stats:
+        all_teams.add(stat.team)
+        all_weeks.add(stat.week)
+    
+    result = []
+    
+    # Calculate cumulative stats for each team and week
+    for team in sorted(all_teams):
+        cumulative_actual_wins = 0
+        cumulative_actual_losses = 0
+        cumulative_true_wins = 0
+        cumulative_true_losses = 0
+        
+        prev_luck = 0.0
+        
+        for week in sorted(all_weeks):
+            key = (team, week)
+            
+            if key not in stats_by_team_week:
+                continue
+            
+            weekly_stat = stats_by_team_week[key]
+            
+            # Add to cumulative
+            cumulative_actual_wins += weekly_stat.actual_wins
+            cumulative_actual_losses += weekly_stat.actual_losses
+            cumulative_true_wins += weekly_stat.true_wins
+            cumulative_true_losses += weekly_stat.true_losses
+            
+            # Calculate percentages
+            cum_total = cumulative_actual_wins + cumulative_actual_losses
+            cum_win_pct = (cumulative_actual_wins / cum_total) if cum_total > 0 else 0.0
+            
+            cum_true_total = cumulative_true_wins + cumulative_true_losses
+            cum_true_pct = (cumulative_true_wins / cum_true_total) if cum_true_total > 0 else 0.0
+            
+            cum_luck = cum_win_pct - cum_true_pct
+            delta_luck = cum_luck - prev_luck
+            delta_true = cum_true_pct - (weekly_stat.true_percentage if week > min(all_weeks) else 0.0)
+            
+            result.append({
+                'Team': team,
+                'Week': week,
+                'Win %': round(cum_win_pct, 3),
+                'True %': round(cum_true_pct, 3),
+                'Delta True': round(delta_true, 3),
+                'Luck': round(cum_luck, 3),
+                'Delta Luck': round(delta_luck, 3),
+                'Trend': '↑' if delta_luck > 0.01 else '↓' if delta_luck < -0.01 else '→',
+                'Weekly Win %': round(weekly_stat.win_percentage, 3),
+                'Weekly True %': round(weekly_stat.true_percentage, 3),
+                'Weekly Luck': round(weekly_stat.luck, 3),
+            })
+            
+            prev_luck = cum_luck
+    
+    return result
+
+
+def luck_stats_to_dataframe(luck_stats: List[Dict]) -> pd.DataFrame:
+    """
+    Convert luck stats list to DataFrame.
+    
+    Args:
+        luck_stats: List of luck stat dictionaries from calculate_cumulative_luck_stats
+        
+    Returns:
+        DataFrame with luck statistics
+    """
+    if not luck_stats:
+        return pd.DataFrame()
+    
+    return pd.DataFrame(luck_stats)
+

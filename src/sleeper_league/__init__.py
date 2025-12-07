@@ -8,9 +8,16 @@ from .exceptions import (
     CacheError,
     ConfigurationError,
 )
-from .models import TeamRecord, SeasonStats, Matchup, LeagueInfo
+from .models import TeamRecord, SeasonStats, Matchup, LeagueInfo, LuckStats
 from .client import SleeperLeagueClient
-from .stats import calculate_standings, calculate_season_stats, determine_matchup_winner
+from .stats import (
+    calculate_standings,
+    calculate_season_stats,
+    determine_matchup_winner,
+    calculate_luck_stats,
+    calculate_cumulative_luck_stats,
+    luck_stats_to_dataframe,
+)
 from .html import generate_html
 
 __version__ = "2.0.0"
@@ -24,6 +31,7 @@ __all__ = [
     'SeasonStats',
     'Matchup',
     'LeagueInfo',
+    'LuckStats',
     # Exceptions
     'SleeperLeagueError',
     'APIError',
@@ -34,5 +42,8 @@ __all__ = [
     'calculate_standings',
     'calculate_season_stats',
     'determine_matchup_winner',
+    'calculate_luck_stats',
+    'calculate_cumulative_luck_stats',
+    'luck_stats_to_dataframe',
     'generate_html',
 ]

@@ -11,6 +11,7 @@ from src.sleeper_league.client import SleeperLeagueClient
 from src.sleeper_league.stats import (
     calculate_standings,
     calculate_season_stats,
+    calculate_cumulative_luck_stats,
 )
 from src.sleeper_league.html import generate_html
 from src.sleeper_league.exceptions import SleeperLeagueError
@@ -55,9 +56,11 @@ def main() -> int:
         # Calculate statistics
         standings = calculate_standings(matchups)
         stats = calculate_season_stats(matchups)
+        luck_stats = calculate_cumulative_luck_stats(matchups)
         
         logger.info(f"Calculated standings for {len(standings)} teams")
         logger.info(f"Season stats: {stats.total_matchups} matchups, {stats.avg_points:.1f} avg points")
+        logger.info(f"Calculated luck stats for {len(luck_stats)} team-week combinations")
         
         # Generate HTML
         html = generate_html(
@@ -65,6 +68,7 @@ def main() -> int:
             standings=standings,
             league_name=client.league_info.name or "Fantasy League",
             season=client.league_info.season or datetime.now().year,
+            luck_stats=luck_stats,
         )
         
         # Write output

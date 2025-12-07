@@ -84,6 +84,48 @@ class Matchup:
 
 
 @dataclass
+class LuckStats:
+    """Behind the Cue Ball - Luck Statistics."""
+    team: str
+    week: int
+    actual_wins: int
+    actual_losses: int
+    true_wins: int
+    true_losses: int
+    
+    @property
+    def win_percentage(self) -> float:
+        """Team's actual win percentage."""
+        total = self.actual_wins + self.actual_losses
+        return self.actual_wins / total if total > 0 else 0.0
+    
+    @property
+    def true_percentage(self) -> float:
+        """Win percentage if played all teams."""
+        total = self.true_wins + self.true_losses
+        return self.true_wins / total if total > 0 else 0.0
+    
+    @property
+    def luck(self) -> float:
+        """Luck factor: Win % - True %."""
+        return self.win_percentage - self.true_percentage
+    
+    def to_dict(self) -> Dict[str, object]:
+        """Convert to dictionary."""
+        return {
+            'Team': self.team,
+            'Week': self.week,
+            'Actual W': self.actual_wins,
+            'Actual L': self.actual_losses,
+            'Win %': round(self.win_percentage, 3),
+            'True W': self.true_wins,
+            'True L': self.true_losses,
+            'True %': round(self.true_percentage, 3),
+            'Luck': round(self.luck, 3),
+        }
+
+
+@dataclass
 class LeagueInfo:
     """League information."""
     league_id: str
