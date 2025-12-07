@@ -337,9 +337,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     
     <script>
         const weeklyTables = {{ weekly_tables_json }};
+        const standingsByYear = {{ standings_by_year_json }};
         const statsTableData = {{ stats_table_data_json }};
         const allYears = {{ all_years_json }};
-        const standingsHtml = `{{ standings_html }}`;
         const activeWeek = {{ active_week }};
         const activeSeason = {{ active_season }};
         
@@ -372,7 +372,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         function updateWeekSelector() {
             weekSelector.innerHTML = '';
             const selectedYear = parseInt(yearSelector.value);
-            const weeksForYear = Object.keys(statsTableData[selectedYear] || {})
+            const selectedYearStr = String(selectedYear);
+            const weeksForYear = Object.keys(weeklyTables[selectedYearStr] || {})
                 .map(w => parseInt(w))
                 .sort((a, b) => a - b);
             
@@ -385,19 +386,32 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             });
             
             displayWeekMatchups();
+            displayStandings();
         }
         
         function displayWeekMatchups() {
-            const selectedWeek = weekSelector.value;
-            matchupContainer.innerHTML = weeklyTables[selectedWeek] || '<p>No matchups found.</p>';
+            const selectedYear = parseInt(yearSelector.value);
+            const selectedYearStr = String(selectedYear);
+            const selectedWeek = parseInt(weekSelector.value);
+            const weekStr = String(selectedWeek);
+            const yearTables = weeklyTables[selectedYearStr] || {};
+            matchupContainer.innerHTML = yearTables[weekStr] || '<p>No matchups found.</p>';
+        }
+        
+        function displayStandings() {
+            const selectedYear = parseInt(yearSelector.value);
+            const selectedYearStr = String(selectedYear);
+            standingsContainer.innerHTML = standingsByYear[selectedYearStr] || '<p>No standings data available.</p>';
         }
         
         function displayStats() {
             const selectedYear = parseInt(yearSelector.value);
+            const selectedYearStr = String(selectedYear);
             const selectedWeek = parseInt(weekSelector.value);
+            const weekStr = String(selectedWeek);
             
-            const yearData = statsTableData[selectedYear] || {};
-            const weekData = yearData[selectedWeek] || [];
+            const yearData = statsTableData[selectedYearStr] || {};
+            const weekData = yearData[weekStr] || [];
             
             if (weekData.length === 0) {
                 statsContainer.innerHTML = '<p>No stats data available for this week.</p>';
@@ -523,12 +537,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         yearSelector.addEventListener('change', updateWeekSelector);
         weekSelector.addEventListener('change', () => {
             displayWeekMatchups();
+            displayStandings();
             displayStats();
         });
         
         // Initialize displays
         updateWeekSelector();
-        standingsContainer.innerHTML = standingsHtml;
         displayStats();
     </script>
 </body>
@@ -542,6 +556,8 @@ def generate_html(
     league_name: str = "Fantasy League",
     season: int = None,
     luck_stats: Optional[List[Dict]] = None,
+    historical_matchups: Optional[Dict[int, List[Matchup]]] = None,
+    historical_standings: Optional[Dict[int, List[TeamRecord]]] = None,
     historical_luck_stats: Optional[Dict[int, List[Dict]]] = None,
 ) -> str:
     """
@@ -553,13 +569,19 @@ def generate_html(
         league_name: League name
         season: Season year (current season)
         luck_stats: Optional list of luck stat dictionaries for current season
-        historical_luck_stats: Optional dict mapping year -> list of luck stats
+        historical_matchups: Optional dict mapping year -> list of matchups for that year
+        historical_standings: Optional dict mapping year -> list of standings for that year
+        historical_luck_stats: Optional dict mapping year -> list of luck stats for that year
         
     Returns:
         HTML page as string
     """
     if season is None:
         season = datetime.now().year
+    
+    # Ensure season is an integer
+    if isinstance(season, str):
+        season = int(season)
     
     # Organize luck stats by year and week
     stats_table_data: Dict[int, Dict[int, List[Dict]]] = {}
@@ -577,58 +599,97 @@ def generate_html(
     # Historical stats
     if historical_luck_stats:
         for year, year_stats in historical_luck_stats.items():
+            year_int = int(year) if isinstance(year, str) else year
             stats_by_week = {}
             for stat in year_stats:
                 week = stat.get('Week', 1)
                 if week not in stats_by_week:
                     stats_by_week[week] = []
                 stats_by_week[week].append(stat)
-            stats_table_data[year] = stats_by_week
+            stats_table_data[year_int] = stats_by_week
     
     # Get all available years and ensure they're all integers
     all_years = sorted([int(year) for year in stats_table_data.keys()], reverse=True)
     if not all_years:
         all_years = [season]
     
-    # Group matchups by week
+    # Organize matchups by year and week
+    matchups_by_year_week: Dict[int, Dict[int, List[Matchup]]] = {}
+    
+    # Current season matchups
+    for m in matchups:
+        if season not in matchups_by_year_week:
+            matchups_by_year_week[season] = {}
+        if m.week not in matchups_by_year_week[season]:
+            matchups_by_year_week[season][m.week] = []
+        matchups_by_year_week[season][m.week].append(m)
+    
+    # Historical matchups
+    if historical_matchups:
+        for year, year_matchups in historical_matchups.items():
+            year_int = int(year) if isinstance(year, str) else year
+            if year_int not in matchups_by_year_week:
+                matchups_by_year_week[year_int] = {}
+            for m in year_matchups:
+                if m.week not in matchups_by_year_week[year_int]:
+                    matchups_by_year_week[year_int][m.week] = []
+                matchups_by_year_week[year_int][m.week].append(m)
+    
+    # Generate HTML for each week of each year
+    weekly_tables: Dict[int, Dict[int, str]] = {}  # year -> week -> html
+    for year in all_years:
+        weekly_tables[year] = {}
+        year_matchups = matchups_by_year_week.get(year, {})
+        for week in sorted(year_matchups.keys()):
+            week_matchups = year_matchups[week]
+            df = pd.DataFrame([
+                {
+                    'Team 1': m.team_1,
+                    'Score 1': m.score_1,
+                    'Team 2': m.team_2,
+                    'Score 2': m.score_2,
+                }
+                for m in week_matchups
+            ])
+            
+            if not df.empty:
+                html = df.to_html(index=False, classes='matchup-table')
+                html = html.replace('<td>', '<td class="cell">')
+                html = html.replace('<th>', '<th class="header-cell">')
+                weekly_tables[year][week] = html
+    
+    # Organize standings by year
+    standings_by_year: Dict[int, str] = {}
+    
+    # Current season standings
+    standings_df = pd.DataFrame([s.to_dict() for s in standings])
+    if not standings_df.empty:
+        html = standings_df.to_html(index=False, classes='standings-table')
+        html = html.replace('<td>', '<td class="cell">')
+        html = html.replace('<th>', '<th class="header-cell">')
+        standings_by_year[season] = html
+    
+    # Historical standings
+    if historical_standings:
+        for year, year_standings in historical_standings.items():
+            year_int = int(year) if isinstance(year, str) else year
+            standings_df = pd.DataFrame([s.to_dict() for s in year_standings])
+            if not standings_df.empty:
+                html = standings_df.to_html(index=False, classes='standings-table')
+                html = html.replace('<td>', '<td class="cell">')
+                html = html.replace('<th>', '<th class="header-cell">')
+                standings_by_year[year_int] = html
+    
+    # Generate luck stats data (keep as JSON for JavaScript processing)
+    stats_html = ""  # No longer pre-rendered, JS handles it
+    
+    # Determine active week from current season matchups
     matchups_by_week: Dict[int, List[Matchup]] = {}
     for m in matchups:
         if m.week not in matchups_by_week:
             matchups_by_week[m.week] = []
         matchups_by_week[m.week].append(m)
     
-    # Generate HTML for each week
-    weekly_tables = {}
-    for week, week_matchups in sorted(matchups_by_week.items()):
-        df = pd.DataFrame([
-            {
-                'Team 1': m.team_1,
-                'Score 1': m.score_1,
-                'Team 2': m.team_2,
-                'Score 2': m.score_2,
-            }
-            for m in week_matchups
-        ])
-        
-        if not df.empty:
-            html = df.to_html(index=False, classes='matchup-table')
-            html = html.replace('<td>', '<td class="cell">')
-            html = html.replace('<th>', '<th class="header-cell">')
-            weekly_tables[week] = html
-    
-    # Generate standings HTML
-    standings_df = pd.DataFrame([s.to_dict() for s in standings])
-    standings_html = ""
-    if not standings_df.empty:
-        html = standings_df.to_html(index=False, classes='standings-table')
-        html = html.replace('<td>', '<td class="cell">')
-        html = html.replace('<th>', '<th class="header-cell">')
-        standings_html = html
-    
-    # Generate luck stats data (keep as JSON for JavaScript processing)
-    stats_html = ""  # No longer pre-rendered, JS handles it
-    
-    # Determine active week
     active_week = 1
     for week in sorted(matchups_by_week.keys(), reverse=True):
         week_matches = matchups_by_week[week]
@@ -645,7 +706,7 @@ def generate_html(
         'season': season,
         'timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
         'weekly_tables_json': json.dumps(weekly_tables),
-        'standings_html': standings_html,
+        'standings_by_year_json': json.dumps(standings_by_year),
         'stats_html': stats_html,
         'stats_table_data_json': json.dumps(stats_table_data),
         'all_years_json': json.dumps(all_years),
