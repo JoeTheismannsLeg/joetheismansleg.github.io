@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sleeper-league-site"
+name = "joetheismannsleg"
 version = "2.0.0"
 description = "Fantasy football league dashboard for Sleeper.app with luck statistics"
 readme = "README.md"
@@ -42,7 +42,7 @@ dev = [
 ]
 
 [project.scripts]
-sleeper-league = "sleeper_league.cli:main"
+fantasy-league = "joetheismannsleg.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -93,4 +93,4 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "--cov=src/sleeper_league --cov-report=term-missing"
+addopts = "--cov=src/joetheismannsleg --cov-report=term-missing"

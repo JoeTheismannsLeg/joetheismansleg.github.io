@@ -1,4 +1,4 @@
-"""Enhanced Sleeper League API wrapper with modern Python features."""
+"""Enhanced fantasy league API wrapper with modern Python features."""
 
 import logging
 from typing import Dict, List, Optional
@@ -13,11 +13,11 @@ from ..models import Matchup, LeagueInfo, TeamRecord
 logger = logging.getLogger(__name__)
 
 
-class SleeperLeagueClient:
+class LeagueClient:
     """
-    Modern Sleeper API client with improved error handling and type hints.
+    Modern fantasy league API client with improved error handling and type hints.
     
-    This is an improved version of SleeperLeague with better architecture,
+    Fetches fantasy league data from configured API with better architecture,
     logging, and error handling.
     """
 
@@ -39,7 +39,7 @@ class SleeperLeagueClient:
         self.users_mapping: Dict[str, str] = {}  # user_id -> team_name
         self.rosters_mapping: Dict[int, str] = {}  # roster_id -> team_name
         
-        logger.info(f"Initialized SleeperLeagueClient for league {config.league_id}")
+        logger.info(f"Initialized LeagueClient for league {config.league_id}")
         self._fetch_base_data()
 
     def _api_call(self, endpoint: str) -> Dict:

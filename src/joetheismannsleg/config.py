@@ -1,4 +1,4 @@
-"""Configuration management for Sleeper League module."""
+"""Configuration management for fantasy league data fetching."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 
 @dataclass
 class LeagueConfig:
-    """Configuration for Sleeper League."""
+    """Configuration for fantasy league data source."""
     league_id: str
     base_url: str = 'https://api.sleeper.app/v1'
     cache_dir: Path = Path('.cache')

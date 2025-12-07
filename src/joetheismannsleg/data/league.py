@@ -1,4 +1,4 @@
-"""Modern Sleeper League API wrapper with improved error handling and type hints."""
+"""Modern fantasy league API wrapper with improved error handling and type hints."""
 
 import logging
 from typing import Dict, List, Optional
@@ -13,9 +13,9 @@ from ..models import Matchup, LeagueInfo
 logger = logging.getLogger(__name__)
 
 
-class SleeperLeague:
+class League:
     """
-    Modern Sleeper API client with improved error handling and type hints.
+    Modern fantasy league API client with improved error handling and type hints.
     """
 
     def __init__(self, config: LeagueConfig) -> None:
@@ -36,7 +36,7 @@ class SleeperLeague:
         self.users_mapping: Dict[str, str] = {}
         self.rosters_mapping: Dict[int, str] = {}
         
-        logger.info(f"Initialized SleeperLeague for league {config.league_id}")
+        logger.info(f"Initialized League for league {config.league_id}")
         self._fetch_base_data()
 
     def _api_call(self, endpoint: str) -> Dict:

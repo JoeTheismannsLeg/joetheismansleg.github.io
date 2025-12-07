@@ -1,4 +1,4 @@
-"""Data models for Sleeper League."""
+"""Data models for fantasy league data."""
 
 from dataclasses import dataclass, field
 from typing import Dict, Optional

@@ -1,11 +1,11 @@
-"""Command-line interface for sleeper-league-site."""
+"""Command-line interface for fantasy league data fetcher."""
 
 import logging
 import sys
 from pathlib import Path
 
 from .config import LeagueConfig
-from .data import SleeperLeagueClient
+from .data import LeagueClient
 from .calculations import (
     calculate_standings,
     calculate_season_stats,
@@ -38,7 +38,7 @@ def main() -> int:
         logger.info(f"Connecting to league {config.league_id}...")
         
         # Fetch data
-        client = SleeperLeagueClient(config)
+        client = LeagueClient(config)
         matchups = client.fetch_season_matchups(weeks=17)
         logger.info(f"Fetched {len(matchups)} matchups")
         

@@ -1,8 +1,8 @@
-"""Sleeper League - Modern fantasy football league data fetcher and analyzer."""
+"""Fantasy League Data - Modern fantasy football league data fetcher and analyzer."""
 
 from .config import LeagueConfig
 from .exceptions import (
-    SleeperLeagueError,
+    LeagueError,
     APIError,
     DataValidationError,
     CacheError,
@@ -11,8 +11,8 @@ from .exceptions import (
 from .models import TeamRecord, SeasonStats, Matchup, LeagueInfo, LuckStats
 
 # Data layer imports
-from .data.client import SleeperLeagueClient
-from .data.league import SleeperLeague
+from .data.client import LeagueClient
+from .data.league import League
 
 # Calculations layer imports
 from .calculations import (
@@ -30,7 +30,7 @@ from .ui import generate_html
 __version__ = "2.0.0"
 __all__ = [
     # Core Client
-    'SleeperLeagueClient',
+    'LeagueClient',
     # Configuration
     'LeagueConfig',
     # Models
@@ -40,7 +40,7 @@ __all__ = [
     'LeagueInfo',
     'LuckStats',
     # Exceptions
-    'SleeperLeagueError',
+    'LeagueError',
     'APIError',
     'DataValidationError',
     'CacheError',
@@ -53,4 +53,5 @@ __all__ = [
     'calculate_cumulative_luck_stats',
     'luck_stats_to_dataframe',
     'generate_html',
+    'League',
 ]

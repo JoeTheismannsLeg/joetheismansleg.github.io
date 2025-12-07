@@ -42,7 +42,7 @@ jobs:
           python -m pip install .
 
       - name: Generate index.html using Python
-        run: sleeper-league
+        run: fantasy-league
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3

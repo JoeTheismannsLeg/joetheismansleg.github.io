@@ -1,4 +1,4 @@
-"""Package entry point for python -m sleeper_league execution."""
+"""Package entry point for python -m joetheismannsleg execution."""
 
 import sys
 from .cli import main
