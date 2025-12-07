@@ -265,15 +265,15 @@ def calculate_cumulative_luck_stats(matchups: List[Matchup]) -> List[Dict]:
             result.append({
                 'Team': team,
                 'Week': week,
-                'Win %': round(cum_win_pct, 3),
-                'True %': round(cum_true_pct, 3),
-                'Delta True': round(delta_true, 3),
-                'Luck': round(cum_luck, 3),
-                'Delta Luck': round(delta_luck, 3),
+                'Win %': f"{cum_win_pct * 100:.1f}%",
+                'True %': f"{cum_true_pct * 100:.1f}%",
+                'Delta True': f"{delta_true * 100:.1f}%",
+                'Luck': f"{cum_luck * 100:.1f}%",
+                'Delta Luck': f"{delta_luck * 100:.1f}%",
                 'Trend': '↑' if delta_luck > 0.01 else '↓' if delta_luck < -0.01 else '→',
-                'Weekly Win %': round(weekly_stat.win_percentage, 3),
-                'Weekly True %': round(weekly_stat.true_percentage, 3),
-                'Weekly Luck': round(weekly_stat.luck, 3),
+                'Weekly Win %': f"{weekly_stat.win_percentage * 100:.1f}%",
+                'Weekly True %': f"{weekly_stat.true_percentage * 100:.1f}%",
+                'Weekly Luck': f"{weekly_stat.luck * 100:.1f}%",
             })
             
             prev_luck = cum_luck

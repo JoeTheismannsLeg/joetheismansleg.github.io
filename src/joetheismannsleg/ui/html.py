@@ -479,6 +479,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 let aVal = a[column];
                 let bVal = b[column];
                 
+                // Handle percentage strings (e.g., "88.9%")
+                if (String(aVal).includes('%') && String(bVal).includes('%')) {
+                    const aNum = parseFloat(aVal.replace('%', ''));
+                    const bNum = parseFloat(bVal.replace('%', ''));
+                    return currentSortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+                }
+                
                 // Try to parse as number
                 const aNum = parseFloat(aVal);
                 const bNum = parseFloat(bVal);

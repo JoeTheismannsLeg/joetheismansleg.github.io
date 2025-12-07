@@ -25,7 +25,7 @@ class TeamRecord:
             'Team': self.team,
             'W': self.wins,
             'L': self.losses,
-            'W%': round(self.win_percentage, 3),
+            'W%': f"{self.win_percentage * 100:.1f}%",
             'PF': round(self.points_for, 2),
             'PA': round(self.points_against, 2)
         }
@@ -117,11 +117,11 @@ class LuckStats:
             'Week': self.week,
             'Actual W': self.actual_wins,
             'Actual L': self.actual_losses,
-            'Win %': round(self.win_percentage, 3),
+            'Win %': f"{self.win_percentage * 100:.1f}%",
             'True W': self.true_wins,
             'True L': self.true_losses,
-            'True %': round(self.true_percentage, 3),
-            'Luck': round(self.luck, 3),
+            'True %': f"{self.true_percentage * 100:.1f}%",
+            'Luck': f"{self.luck * 100:.1f}%",
         }
 
 
