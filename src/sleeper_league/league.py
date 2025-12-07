@@ -1,248 +1,243 @@
-"""Sleeper League API wrapper for fetching fantasy football league data."""
+"""Modern Sleeper League API wrapper with improved error handling and type hints."""
+
+import logging
+from typing import Dict, List, Optional
 
 import requests
 import pandas as pd
 
+from .config import LeagueConfig
+from .exceptions import APIError
+from .models import Matchup, LeagueInfo
+
+logger = logging.getLogger(__name__)
+
 
 class SleeperLeague:
     """
-    A class to interact with the Sleeper API for a specific fantasy football league.
-    Encapsulates methods for fetching league details, user data, roster data,
-    and matchup information.
+    Modern Sleeper API client with improved error handling and type hints.
     """
 
-    def __init__(self, league_id: str, base_url: str = 'https://api.sleeper.app/v1'):
+    def __init__(self, config: LeagueConfig) -> None:
         """
-        Initialize the SleeperLeague instance.
+        Initialize the API client.
         
         Args:
-            league_id (str): The Sleeper league ID
-            base_url (str): The base URL for the Sleeper API
+            config: LeagueConfig instance with API settings
+            
+        Raises:
+            APIError: If base data cannot be fetched
         """
-        self.league_id = league_id
-        self.base_url = base_url
-        self.league_data = None
-        self.users_data = None
-        self.user_id_to_name = {}
-        self.user_id_to_team_name = {}
-        self.team_name_to_user_id = {}
-        self.roster_id_to_user_id = {}
-        self.roster_id_to_team_name = {}
-        print(f"Initializing SleeperLeague for league ID: {self.league_id}")
+        self.config = config
+        self.session = requests.Session()
+        self.session.timeout = config.request_timeout
+        
+        self.league_info: Optional[LeagueInfo] = None
+        self.users_mapping: Dict[str, str] = {}
+        self.rosters_mapping: Dict[int, str] = {}
+        
+        logger.info(f"Initialized SleeperLeague for league {config.league_id}")
         self._fetch_base_data()
 
-    def _fetch_base_data(self):
+    def _api_call(self, endpoint: str) -> Dict:
         """
-        Fetches basic league information, user data, and roster data
-        and stores them as instance attributes.
-        """
-        print(f"Fetching base data for league ID: {self.league_id}")
-
-        # 1. Fetch league details
-        league_endpoint = f"{self.base_url}/league/{self.league_id}"
-        try:
-            response = requests.get(league_endpoint)
-            response.raise_for_status()
-            self.league_data = response.json()
-            print("Successfully fetched league data.")
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching league data: {e}")
-            self.league_data = None
-            return  # Exit if league data cannot be fetched
-
-        # 2. Fetch user data
-        users_endpoint = f"{self.base_url}/league/{self.league_id}/users"
-        try:
-            user_response = requests.get(users_endpoint)
-            user_response.raise_for_status()
-            self.users_data = user_response.json()
-            self.user_id_to_name = {user['user_id']: user['display_name'] for user in self.users_data}
-            # Also store team names from user metadata
-            self.user_id_to_team_name = {}
-            for user in self.users_data:
-                metadata = user.get('metadata', {})
-                team_name = metadata.get('team_name') if metadata else None
-                if team_name:
-                    self.user_id_to_team_name[user['user_id']] = team_name
-            print(f"Successfully fetched user data for {len(self.user_id_to_name)} users.")
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching user data: {e}")
-            self.users_data = None
-            self.user_id_to_name = {}
-            self.user_id_to_team_name = {}
-
-        # 3. Fetch roster data
-        rosters_endpoint = f"{self.base_url}/league/{self.league_id}/rosters"
-        try:
-            rosters_response = requests.get(rosters_endpoint)
-            rosters_response.raise_for_status()
-            rosters_data = rosters_response.json()
-            self.roster_id_to_user_id = {}
-            self.roster_id_to_team_name = {}
-            self.team_name_to_user_id = {}
-            for roster_entry in rosters_data:
-                if roster_entry.get('owner_id'):
-                    user_id = roster_entry['owner_id']
-                    self.roster_id_to_user_id[roster_entry['roster_id']] = user_id
-                    # Get team name from user metadata, fallback to display name
-                    team_name = self.user_id_to_team_name.get(user_id)
-                    if not team_name:
-                        team_name = self.user_id_to_name.get(user_id, f"Unknown Team (Roster {roster_entry['roster_id']})")
-                    self.roster_id_to_team_name[roster_entry['roster_id']] = team_name
-                    # Map team name to user ID for easy lookup
-                    self.team_name_to_user_id[team_name] = user_id
-                else:
-                    print(f"Roster ID {roster_entry['roster_id']} has no owner. Skipping.")
-            print(f"Successfully fetched roster data for {len(self.roster_id_to_user_id)} rosters.")
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching roster data: {e}")
-            self.roster_id_to_user_id = {}
-            self.roster_id_to_team_name = {}
-
-        if self.league_data and self.user_id_to_name and self.roster_id_to_user_id:
-            print("Base data loaded successfully.")
-        else:
-            print("Failed to load all base data.")
-
-    def _get_team_name(self, roster_id: int) -> str:
-        """Helper to get team name from roster_id."""
-        return self.roster_id_to_team_name.get(roster_id, f"Unknown Team (Roster {roster_id})")
-
-    def fetch_weekly_matchups(self, week_number: int) -> pd.DataFrame:
-        """
-        Fetches and processes matchup data for a given week.
-
+        Make an API call with error handling.
+        
         Args:
-            week_number (int): The week number to fetch matchups for.
-
+            endpoint: API endpoint path
+            
         Returns:
-            pd.DataFrame: A DataFrame containing formatted matchups for that week.
+            JSON response as dictionary
+            
+        Raises:
+            APIError: If the request fails
         """
-        if not self.league_data or not self.user_id_to_name or not self.roster_id_to_user_id:
-            print("Base league data is not loaded. Cannot fetch matchups.")
-            return pd.DataFrame()
-
-        matchups_endpoint = f"{self.base_url}/league/{self.league_id}/matchups/{week_number}"
-        print(f"Fetching matchup data for week {week_number} from: {matchups_endpoint}")
-
+        url = f"{self.config.base_url}{endpoint}"
         try:
-            response = requests.get(matchups_endpoint)
+            response = self.session.get(url, timeout=self.config.request_timeout)
             response.raise_for_status()
-            matchup_data = response.json()
-            print(f"Successfully fetched {len(matchup_data)} entries for week {week_number}.")
+            return response.json()
+        except requests.exceptions.Timeout as e:
+            raise APIError(f"API call timeout: {url}") from e
+        except requests.exceptions.ConnectionError as e:
+            raise APIError(f"Connection error to {url}") from e
+        except requests.exceptions.HTTPError as e:
+            raise APIError(f"HTTP {e.response.status_code}: {url}") from e
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching matchup data for week {week_number}: {e}")
-            return pd.DataFrame()  # Return empty DataFrame on error
+            raise APIError(f"Request failed: {e}") from e
 
-        matchup_details = []
-        matchups_grouped = {}
+    def _fetch_base_data(self) -> None:
+        """Fetch and cache league base data."""
+        try:
+            league_data = self._api_call(f"/league/{self.config.league_id}")
+            users_data = self._api_call(f"/league/{self.config.league_id}/users")
+            rosters_data = self._api_call(f"/league/{self.config.league_id}/rosters")
+            
+            # Store league info
+            self.league_info = LeagueInfo(
+                league_id=self.config.league_id,
+                name=league_data.get('name'),
+                season=league_data.get('season'),
+                status=league_data.get('status', 'unknown'),
+                current_week=league_data.get('week')
+            )
+            
+            # Build users mapping
+            for user in users_data:
+                user_id = user['user_id']
+                team_name = user.get('metadata', {}).get('team_name', user.get('display_name'))
+                self.users_mapping[user_id] = team_name
+                self.league_info.users[user_id] = user.get('display_name')
+            
+            # Build rosters mapping
+            for roster in rosters_data:
+                if roster.get('owner_id'):
+                    roster_id = roster['roster_id']
+                    user_id = roster['owner_id']
+                    team_name = self.users_mapping.get(user_id, f"Unknown Team (Roster {roster_id})")
+                    self.rosters_mapping[roster_id] = team_name
+            
+            logger.info(f"Loaded league '{self.league_info.name}' with {len(self.users_mapping)} users")
+            
+        except APIError as e:
+            logger.error(f"Failed to fetch base data: {e}")
+            raise
+
+    def fetch_week_matchups(self, week: int) -> List[Matchup]:
+        """
+        Fetch matchups for a specific week.
+        
+        Args:
+            week: Week number (1-17)
+            
+        Returns:
+            List of Matchup objects
+        """
+        try:
+            matchup_data = self._api_call(f"/league/{self.config.league_id}/matchups/{week}")
+        except APIError as e:
+            logger.warning(f"Failed to fetch week {week} matchups: {e}")
+            return []
+        
+        matchups: List[Matchup] = []
+        grouped = self._group_matchups(matchup_data)
+        
+        for matchup_id, teams in grouped.items():
+            if len(teams) == 2:
+                matchups.append(self._create_matchup_normal(week, matchup_id, teams))
+            elif len(teams) == 1:
+                matchups.append(self._create_matchup_bye(week, matchup_id, teams[0]))
+            else:
+                matchups.extend(self._create_matchup_incomplete(week, matchup_id, teams))
+        
+        return matchups
+
+    def fetch_all_matchups(self, weeks: int = 17) -> List[Matchup]:
+        """
+        Fetch all matchups for the season.
+        
+        Args:
+            weeks: Number of weeks to fetch (default 17)
+            
+        Returns:
+            List of all Matchup objects
+        """
+        all_matchups: List[Matchup] = []
+        
+        for week in range(1, weeks + 1):
+            matchups = self.fetch_week_matchups(week)
+            all_matchups.extend(matchups)
+            logger.debug(f"Fetched {len(matchups)} matchups for week {week}")
+        
+        logger.info(f"Fetched {len(all_matchups)} total matchups for {weeks} weeks")
+        return all_matchups
+
+    @staticmethod
+    def _group_matchups(matchup_data: List[Dict]) -> Dict[Optional[int], List[Dict]]:
+        """Group matchups by matchup_id."""
+        grouped: Dict[Optional[int], List[Dict]] = {}
         for match in matchup_data:
-            matchup_id = match['matchup_id']
-            if matchup_id not in matchups_grouped:
-                matchups_grouped[matchup_id] = []
-            matchups_grouped[matchup_id].append(match)
+            matchup_id = match.get('matchup_id')
+            if matchup_id not in grouped:
+                grouped[matchup_id] = []
+            grouped[matchup_id].append(match)
+        return grouped
 
-        for matchup_id, teams in matchups_grouped.items():
-            if len(teams) == 2:  # Normal matchup
-                team1 = teams[0]
-                team2 = teams[1]
+    def _create_matchup_normal(
+        self, week: int, matchup_id: int, teams: List[Dict]
+    ) -> Matchup:
+        """Create a normal matchup object."""
+        t1, t2 = teams[0], teams[1]
+        return Matchup(
+            matchup_id=matchup_id,
+            week=week,
+            team_1=self.rosters_mapping.get(t1['roster_id'], f"Unknown {t1['roster_id']}"),
+            score_1=t1['points'],
+            team_2=self.rosters_mapping.get(t2['roster_id'], f"Unknown {t2['roster_id']}"),
+            score_2=t2['points']
+        )
 
-                team1_name = self._get_team_name(team1['roster_id'])
-                team2_name = self._get_team_name(team2['roster_id'])
+    def _create_matchup_bye(
+        self, week: int, matchup_id: int, team: Dict
+    ) -> Matchup:
+        """Create a bye week matchup object."""
+        return Matchup(
+            matchup_id=matchup_id,
+            week=week,
+            team_1=self.rosters_mapping.get(team['roster_id'], f"Unknown {team['roster_id']}"),
+            score_1=team['points'],
+            team_2='BYE',
+            score_2=0.0
+        )
 
-                team1_score = team1['points']
-                team2_score = team2['points']
+    def _create_matchup_incomplete(
+        self, week: int, matchup_id: Optional[int], teams: List[Dict]
+    ) -> List[Matchup]:
+        """Create incomplete matchup objects."""
+        return [
+            Matchup(
+                matchup_id=matchup_id,
+                week=week,
+                team_1=self.rosters_mapping.get(t['roster_id'], f"Unknown {t['roster_id']}"),
+                score_1=t['points'],
+                team_2='UNPLAYED/INCOMPLETE',
+                score_2=0.0
+            )
+            for t in teams
+        ]
 
-                matchup_details.append({
-                    'Matchup ID': matchup_id,
-                    'Team 1': team1_name,
-                    'Score 1': team1_score,
-                    'Team 2': team2_name,
-                    'Score 2': team2_score
-                })
-            elif len(teams) == 1:  # Bye week
-                team1 = teams[0]
-                team1_name = self._get_team_name(team1['roster_id'])
-                team1_score = team1['points']
-                matchup_details.append({
-                    'Matchup ID': matchup_id,
-                    'Team 1': team1_name,
-                    'Score 1': team1_score,
-                    'Team 2': 'BYE',
-                    'Score 2': 'N/A'
-                })
-            else:  # Handle incomplete/unplayed matchups
-                for team in teams:
-                    team_name = self._get_team_name(team['roster_id'])
-                    team_score = team['points']
-                    matchup_details.append({
-                        'Matchup ID': matchup_id,
-                        'Team 1': team_name,
-                        'Score 1': team_score,
-                        'Team 2': 'UNPLAYED/INCOMPLETE',
-                        'Score 2': 'N/A'
-                    })
-
-        return pd.DataFrame(matchup_details)
-
-    def fetch_all_matchups(self) -> pd.DataFrame:
+    def to_dataframe(self, matchups: List[Matchup]) -> pd.DataFrame:
         """
-        Fetches matchup data for all weeks in the league (up to 17).
-
+        Convert matchups to pandas DataFrame.
+        
+        Args:
+            matchups: List of Matchup objects
+            
         Returns:
-            pd.DataFrame: A single DataFrame containing all matchups for all weeks.
+            DataFrame with standard columns
         """
-        if not self.league_data:
-            print("League data not loaded. Cannot fetch matchups.")
+        if not matchups:
             return pd.DataFrame()
-
-        # Always iterate through 17 weeks
-        num_total_weeks = 17
-
-        all_matchups_dfs = []
-        for week in range(1, num_total_weeks + 1):
-            weekly_df = self.fetch_weekly_matchups(week)
-            if not weekly_df.empty:
-                weekly_df['Week'] = week  # Add a 'Week' column
-                all_matchups_dfs.append(weekly_df)
-
-        if all_matchups_dfs:
-            return pd.concat(all_matchups_dfs, ignore_index=True)
-        else:
-            return pd.DataFrame()
-
-    def fetch_current_week_matchups(self) -> pd.DataFrame:
-        """
-        Fetch matchup data only for the current active week.
-        For in-season, uses the league status. For post-season, fetches all weeks.
-
-        Returns:
-            pd.DataFrame: Matchups for the current week, or all weeks if post-season.
-        """
-        if not self.league_data:
-            print("League data not loaded. Cannot fetch current week.")
-            return pd.DataFrame()
-
-        # Check if league is in post-season or off-season
-        season_status = self.league_data.get('status', 'regular')
         
-        if season_status == 'post_season' or season_status == 'off_season':
-            # For post-season/off-season, fetch all weeks as we won't have new weeks
-            print(f"League is in {season_status}, fetching all weeks")
-            return self.fetch_all_matchups()
+        data = [
+            {
+                'Week': m.week,
+                'Matchup ID': m.matchup_id,
+                'Team 1': m.team_1,
+                'Score 1': m.score_1,
+                'Team 2': m.team_2,
+                'Score 2': m.score_2,
+            }
+            for m in matchups
+        ]
         
-        # Get current week from league metadata
-        current_week = self.league_data.get('week')
-        
-        if current_week is None or current_week <= 0:
-            print("Could not determine current week from league data, fetching all weeks")
-            return self.fetch_all_matchups()
-        
-        print(f"Fetching only week {current_week} from API (current active week)")
-        weekly_df = self.fetch_weekly_matchups(current_week)
-        
-        if not weekly_df.empty:
-            weekly_df['Week'] = current_week
-            return weekly_df
-        else:
-            return pd.DataFrame()
+        return pd.DataFrame(data)
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.session.close()
+        logger.debug("Closed API session")
