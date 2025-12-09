@@ -685,9 +685,12 @@ def generate_html(
                 )
 
                 if not df.empty:
-                    html = df.to_html(index=False, classes="matchup-table")
-                    html = html.replace("<td>", '<td class="cell">')
-                    html = html.replace("<th>", '<th class="header-cell">')
+                    # Add Sleeper matchups title
+                    html = "<h3 style='color: #013369; margin-bottom: 15px;'>Sleeper Matchups</h3>"
+                    table_html = df.to_html(index=False, classes="matchup-table")
+                    table_html = table_html.replace("<td>", '<td class="cell">')
+                    table_html = table_html.replace("<th>", '<th class="header-cell">')
+                    html += table_html
                     html_parts.append(html)
             
             # Generate postseason matchups table if present
@@ -706,8 +709,8 @@ def generate_html(
                 )
 
                 if not df.empty:
-                    # Add postseason title
-                    html = "<h3 style='color: #d50a0a; margin-top: 30px; margin-bottom: 15px;'>JTL Postseason Matchups</h3>"
+                    # Add JTL postseason title
+                    html = "<h3 style='color: #d50a0a; margin-top: 30px; margin-bottom: 15px;'>JTL Matchups</h3>"
                     table_html = df.to_html(index=False, classes="matchup-table")
                     table_html = table_html.replace("<td>", '<td class="cell">')
                     table_html = table_html.replace("<th>", '<th class="header-cell">')
