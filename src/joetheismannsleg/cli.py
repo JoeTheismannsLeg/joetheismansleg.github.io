@@ -131,15 +131,28 @@ def main() -> int:
 
         # Generate HTML with historical data
         logger.info("Generating HTML report...")
+        # Only pass historical data that excludes current season (current season is passed separately)
+        historical_matchups_only = {
+            year: mups for year, mups in historical_matchups.items() if year != current_season
+        }
+        historical_standings_only = {
+            year: standings_list
+            for year, standings_list in historical_standings.items()
+            if year != current_season
+        }
+        historical_luck_stats_only = {
+            year: stats for year, stats in historical_luck_stats.items() if year != current_season
+        }
+
         html_content = generate_html(
             matchups=matchups,
             standings=standings,
             league_name=league_name,
             season=current_season,
             luck_stats=luck_stats,
-            historical_matchups=historical_matchups if len(historical_matchups) > 1 else None,
-            historical_standings=historical_standings if len(historical_standings) > 1 else None,
-            historical_luck_stats=historical_luck_stats if len(historical_luck_stats) > 1 else None,
+            historical_matchups=historical_matchups_only if len(historical_matchups_only) > 0 else None,
+            historical_standings=historical_standings_only if len(historical_standings_only) > 0 else None,
+            historical_luck_stats=historical_luck_stats_only if len(historical_luck_stats_only) > 0 else None,
             git_branch=git_branch,
             git_commit=git_commit,
             git_commit_full=git_commit_full,
