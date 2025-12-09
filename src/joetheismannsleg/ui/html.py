@@ -46,6 +46,14 @@ h1 {
     background-clip: text;
 }
 
+h3 {
+    color: #d50a0a;
+    font-size: 1.3em;
+    font-weight: 600;
+    margin-top: 30px;
+    margin-bottom: 15px;
+}
+
 .season-year {
     text-align: center;
     color: #666;
