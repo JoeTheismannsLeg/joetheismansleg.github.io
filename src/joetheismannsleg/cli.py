@@ -1,10 +1,11 @@
 """Command-line interface for fantasy league data fetcher."""
 
+import json
 import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .calculations import (
     calculate_cumulative_luck_stats,
@@ -13,6 +14,7 @@ from .calculations import (
 )
 from .config import LeagueConfig
 from .data import LeagueClient
+from .models import Matchup
 from .ui import generate_html
 
 
@@ -42,6 +44,50 @@ def get_git_info() -> Tuple[str, str, str]:
     else:
         # Local build without GitHub Actions context
         return "local build", "n/a", "n/a"
+
+
+
+
+def load_postseason_matchups(season: int) -> List[Matchup]:
+    """
+    Load postseason matchups from JSON file for a specific season.
+
+    Args:
+        season: Season year (e.g., 2025)
+
+    Returns:
+        List of Matchup objects for postseason weeks
+    """
+    postseason_file = Path(__file__).parent.parent.parent / "data" / "postseason_matchups.json"
+
+    try:
+        if not postseason_file.exists():
+            return []
+
+        with open(postseason_file) as f:
+            data = json.load(f)
+
+        season_str = str(season)
+        if season_str not in data:
+            return []
+
+        matchups = []
+        for entry in data[season_str]:
+            matchup = Matchup(
+                matchup_id=None,  # Postseason matchups don't have API matchup_id
+                week=entry["week"],
+                team_1=entry["team_1"],
+                score_1=0.0,  # Scores will be set later when data is available
+                team_2=entry["team_2"],
+                score_2=0.0,
+                name=entry.get("name"),  # Store the postseason matchup name
+            )
+            matchups.append(matchup)
+
+        return matchups
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Failed to load postseason matchups: {e}")
+        return []
 
 
 def setup_logging() -> None:
@@ -129,6 +175,14 @@ def main() -> int:
         else:
             logger.debug("Running in local build mode (no GitHub Actions context)")
 
+        # Load postseason matchups for current season
+        logger.info("Loading postseason matchups...")
+        postseason_matchups = load_postseason_matchups(current_season)
+        logger.info(f"Loaded {len(postseason_matchups)} postseason matchups")
+
+        # Merge postseason matchups with regular matchups
+        all_matchups = matchups + postseason_matchups
+
         # Generate HTML with historical data
         logger.info("Generating HTML report...")
         # Only pass historical data that excludes current season (current season is passed separately)
@@ -145,7 +199,7 @@ def main() -> int:
         }
 
         html_content = generate_html(
-            matchups=matchups,
+            matchups=all_matchups,
             standings=standings,
             league_name=league_name,
             season=current_season,

@@ -61,6 +61,7 @@ class Matchup:
     score_1: float
     team_2: str
     score_2: float
+    name: Optional[str] = None  # Optional name for postseason matchups (e.g., "playoff_g1")
 
     def is_bye(self) -> bool:
         """Check if this is a bye week."""
@@ -69,6 +70,10 @@ class Matchup:
     def is_incomplete(self) -> bool:
         """Check if this matchup is incomplete."""
         return self.team_2 == "UNPLAYED/INCOMPLETE"
+
+    def is_postseason(self) -> bool:
+        """Check if this is a postseason matchup."""
+        return self.name is not None
 
     def winner(self) -> Optional[int]:
         """

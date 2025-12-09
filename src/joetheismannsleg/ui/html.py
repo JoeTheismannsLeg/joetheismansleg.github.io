@@ -656,23 +656,59 @@ def generate_html(
         year_matchups = matchups_by_year_week.get(year, {})
         for week in sorted(year_matchups.keys()):
             week_matchups = year_matchups[week]
-            df = pd.DataFrame(
-                [
-                    {
-                        "Team 1": m.team_1,
-                        "Score 1": m.score_1,
-                        "Team 2": m.team_2,
-                        "Score 2": m.score_2,
-                    }
-                    for m in week_matchups
-                ]
-            )
+            
+            # Separate regular and postseason matchups
+            regular_matchups = [m for m in week_matchups if not m.is_postseason()]
+            postseason_matchups = [m for m in week_matchups if m.is_postseason()]
+            
+            # Generate regular matchups table
+            html_parts = []
+            if regular_matchups:
+                df = pd.DataFrame(
+                    [
+                        {
+                            "Team 1": m.team_1,
+                            "Score 1": m.score_1,
+                            "Team 2": m.team_2,
+                            "Score 2": m.score_2,
+                        }
+                        for m in regular_matchups
+                    ]
+                )
 
-            if not df.empty:
-                html = df.to_html(index=False, classes="matchup-table")
-                html = html.replace("<td>", '<td class="cell">')
-                html = html.replace("<th>", '<th class="header-cell">')
-                weekly_tables[year][week] = html
+                if not df.empty:
+                    html = df.to_html(index=False, classes="matchup-table")
+                    html = html.replace("<td>", '<td class="cell">')
+                    html = html.replace("<th>", '<th class="header-cell">')
+                    html_parts.append(html)
+            
+            # Generate postseason matchups table if present
+            if postseason_matchups:
+                df = pd.DataFrame(
+                    [
+                        {
+                            "Name": m.name,
+                            "Team 1": m.team_1,
+                            "Score 1": m.score_1,
+                            "Team 2": m.team_2,
+                            "Score 2": m.score_2,
+                        }
+                        for m in postseason_matchups
+                    ]
+                )
+
+                if not df.empty:
+                    # Add postseason title
+                    html = "<h3 style='color: #d50a0a; margin-top: 30px; margin-bottom: 15px;'>JTL Postseason Matchups</h3>"
+                    table_html = df.to_html(index=False, classes="matchup-table")
+                    table_html = table_html.replace("<td>", '<td class="cell">')
+                    table_html = table_html.replace("<th>", '<th class="header-cell">')
+                    html += table_html
+                    html_parts.append(html)
+            
+            # Combine all HTML for this week
+            if html_parts:
+                weekly_tables[year][week] = "".join(html_parts)
 
     # Organize standings by year
     standings_by_year: Dict[int, str] = {}
