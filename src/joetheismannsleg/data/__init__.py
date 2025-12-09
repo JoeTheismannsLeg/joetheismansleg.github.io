@@ -4,6 +4,6 @@ from .client import LeagueClient
 from .league import League
 
 __all__ = [
-    'LeagueClient',
-    'League',
+    "LeagueClient",
+    "League",
 ]

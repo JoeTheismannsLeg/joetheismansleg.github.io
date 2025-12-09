@@ -1,8 +1,8 @@
 """Modern HTML generation with template support."""
 
 import logging
-from typing import Dict, List, Optional
 from datetime import datetime
+from typing import Dict, List, Optional
 
 import pandas as pd
 from jinja2 import Template
@@ -332,7 +332,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
         </div>
         
-        <div class="footer">Last Updated: {{ timestamp }}</div>
+        <div class="footer">
+            <div>Last Updated: {{ timestamp }}</div>
+            {% if git_branch and git_commit != 'n/a' %}
+            <div>
+                Branch: <a href="https://github.com/JoeTheismannsLeg/joetheismansleg.github.io/tree/{{ git_branch }}" target="_blank" rel="noopener noreferrer">{{ git_branch }}</a>
+                | Commit: <a href="https://github.com/JoeTheismannsLeg/joetheismansleg.github.io/commit/{{ git_commit_full }}" target="_blank" rel="noopener noreferrer">{{ git_commit }}</a>
+            </div>
+            {% endif %}
+        </div>
     </div>
     
     <script>
@@ -559,10 +567,13 @@ def generate_html(
     historical_matchups: Optional[Dict[int, List[Matchup]]] = None,
     historical_standings: Optional[Dict[int, List[TeamRecord]]] = None,
     historical_luck_stats: Optional[Dict[int, List[Dict]]] = None,
+    git_branch: Optional[str] = None,
+    git_commit: Optional[str] = None,
+    git_commit_full: Optional[str] = None,
 ) -> str:
     """
     Generate HTML page using modern approach.
-    
+
     Args:
         matchups: List of Matchup objects (current season)
         standings: List of TeamRecord objects (current season)
@@ -572,50 +583,53 @@ def generate_html(
         historical_matchups: Optional dict mapping year -> list of matchups for that year
         historical_standings: Optional dict mapping year -> list of standings for that year
         historical_luck_stats: Optional dict mapping year -> list of luck stats for that year
-        
+        git_branch: Optional current git branch name
+        git_commit: Optional short git commit hash (for display)
+        git_commit_full: Optional full git commit hash (for GitHub links)
+
     Returns:
         HTML page as string
     """
     if season is None:
         season = datetime.now().year
-    
+
     # Ensure season is an integer
     if isinstance(season, str):
         season = int(season)
-    
+
     # Organize luck stats by year and week
     stats_table_data: Dict[int, Dict[int, List[Dict]]] = {}
-    
+
     # Current season stats
     if luck_stats:
         stats_by_week: Dict[int, List[Dict]] = {}
         for stat in luck_stats:
-            week = stat.get('Week', 1)
+            week = stat.get("Week", 1)
             if week not in stats_by_week:
                 stats_by_week[week] = []
             stats_by_week[week].append(stat)
         stats_table_data[season] = stats_by_week
-    
+
     # Historical stats
     if historical_luck_stats:
         for year, year_stats in historical_luck_stats.items():
             year_int = int(year) if isinstance(year, str) else year
             stats_by_week = {}
             for stat in year_stats:
-                week = stat.get('Week', 1)
+                week = stat.get("Week", 1)
                 if week not in stats_by_week:
                     stats_by_week[week] = []
                 stats_by_week[week].append(stat)
             stats_table_data[year_int] = stats_by_week
-    
+
     # Get all available years and ensure they're all integers
     all_years = sorted([int(year) for year in stats_table_data.keys()], reverse=True)
     if not all_years:
         all_years = [season]
-    
+
     # Organize matchups by year and week
     matchups_by_year_week: Dict[int, Dict[int, List[Matchup]]] = {}
-    
+
     # Current season matchups
     for m in matchups:
         if season not in matchups_by_year_week:
@@ -623,7 +637,7 @@ def generate_html(
         if m.week not in matchups_by_year_week[season]:
             matchups_by_year_week[season][m.week] = []
         matchups_by_year_week[season][m.week].append(m)
-    
+
     # Historical matchups
     if historical_matchups:
         for year, year_matchups in historical_matchups.items():
@@ -634,7 +648,7 @@ def generate_html(
                 if m.week not in matchups_by_year_week[year_int]:
                     matchups_by_year_week[year_int][m.week] = []
                 matchups_by_year_week[year_int][m.week].append(m)
-    
+
     # Generate HTML for each week of each year
     weekly_tables: Dict[int, Dict[int, str]] = {}  # year -> week -> html
     for year in all_years:
@@ -642,54 +656,56 @@ def generate_html(
         year_matchups = matchups_by_year_week.get(year, {})
         for week in sorted(year_matchups.keys()):
             week_matchups = year_matchups[week]
-            df = pd.DataFrame([
-                {
-                    'Team 1': m.team_1,
-                    'Score 1': m.score_1,
-                    'Team 2': m.team_2,
-                    'Score 2': m.score_2,
-                }
-                for m in week_matchups
-            ])
-            
+            df = pd.DataFrame(
+                [
+                    {
+                        "Team 1": m.team_1,
+                        "Score 1": m.score_1,
+                        "Team 2": m.team_2,
+                        "Score 2": m.score_2,
+                    }
+                    for m in week_matchups
+                ]
+            )
+
             if not df.empty:
-                html = df.to_html(index=False, classes='matchup-table')
-                html = html.replace('<td>', '<td class="cell">')
-                html = html.replace('<th>', '<th class="header-cell">')
+                html = df.to_html(index=False, classes="matchup-table")
+                html = html.replace("<td>", '<td class="cell">')
+                html = html.replace("<th>", '<th class="header-cell">')
                 weekly_tables[year][week] = html
-    
+
     # Organize standings by year
     standings_by_year: Dict[int, str] = {}
-    
+
     # Current season standings
     standings_df = pd.DataFrame([s.to_dict() for s in standings])
     if not standings_df.empty:
-        html = standings_df.to_html(index=False, classes='standings-table')
-        html = html.replace('<td>', '<td class="cell">')
-        html = html.replace('<th>', '<th class="header-cell">')
+        html = standings_df.to_html(index=False, classes="standings-table")
+        html = html.replace("<td>", '<td class="cell">')
+        html = html.replace("<th>", '<th class="header-cell">')
         standings_by_year[season] = html
-    
+
     # Historical standings
     if historical_standings:
         for year, year_standings in historical_standings.items():
             year_int = int(year) if isinstance(year, str) else year
             standings_df = pd.DataFrame([s.to_dict() for s in year_standings])
             if not standings_df.empty:
-                html = standings_df.to_html(index=False, classes='standings-table')
-                html = html.replace('<td>', '<td class="cell">')
-                html = html.replace('<th>', '<th class="header-cell">')
+                html = standings_df.to_html(index=False, classes="standings-table")
+                html = html.replace("<td>", '<td class="cell">')
+                html = html.replace("<th>", '<th class="header-cell">')
                 standings_by_year[year_int] = html
-    
+
     # Generate luck stats data (keep as JSON for JavaScript processing)
     stats_html = ""  # No longer pre-rendered, JS handles it
-    
+
     # Determine active week from current season matchups
     matchups_by_week: Dict[int, List[Matchup]] = {}
     for m in matchups:
         if m.week not in matchups_by_week:
             matchups_by_week[m.week] = []
         matchups_by_week[m.week].append(m)
-    
+
     active_week = 1
     for week in sorted(matchups_by_week.keys(), reverse=True):
         week_matches = matchups_by_week[week]
@@ -697,23 +713,27 @@ def generate_html(
             if any(m.score_1 > 0 or m.score_2 > 0 for m in week_matches if not m.is_bye()):
                 active_week = week
                 break
-    
+
     # Prepare template context
     import json
+
     template_context = {
-        'stylesheet': STYLESHEET,
-        'league_name': league_name,
-        'season': season,
-        'timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
-        'weekly_tables_json': json.dumps(weekly_tables),
-        'standings_by_year_json': json.dumps(standings_by_year),
-        'stats_html': stats_html,
-        'stats_table_data_json': json.dumps(stats_table_data),
-        'all_years_json': json.dumps(all_years),
-        'active_week': active_week,
-        'active_season': season,
+        "stylesheet": STYLESHEET,
+        "league_name": league_name,
+        "season": season,
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "git_branch": git_branch,
+        "git_commit": git_commit,
+        "git_commit_full": git_commit_full,
+        "weekly_tables_json": json.dumps(weekly_tables),
+        "standings_by_year_json": json.dumps(standings_by_year),
+        "stats_html": stats_html,
+        "stats_table_data_json": json.dumps(stats_table_data),
+        "all_years_json": json.dumps(all_years),
+        "active_week": active_week,
+        "active_season": season,
     }
-    
+
     # Render template
     template = Template(HTML_TEMPLATE)
     return template.render(**template_context)

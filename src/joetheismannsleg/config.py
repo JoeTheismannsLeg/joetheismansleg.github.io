@@ -7,12 +7,13 @@ from pathlib import Path
 @dataclass
 class LeagueConfig:
     """Configuration for fantasy league data source."""
+
     league_id: str
-    base_url: str = 'https://api.sleeper.app/v1'
-    cache_dir: Path = Path('.cache')
+    base_url: str = "https://api.sleeper.app/v1"
+    cache_dir: Path = Path(".cache")
     request_timeout: int = 30
     max_retries: int = 3
-    
+
     def __post_init__(self):
         """Validate configuration."""
         if not self.league_id:

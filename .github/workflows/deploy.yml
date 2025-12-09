@@ -17,7 +17,49 @@ permissions:
   id-token: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies with dev extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[dev]"
+
+      - name: Lint with ruff
+        continue-on-error: true
+        run: |
+          ruff check src/ tests/
+          ruff format --check src/ tests/
+
+      - name: Format check with black
+        continue-on-error: true
+        run: black --check src/ tests/
+
+      - name: Type check with mypy
+        continue-on-error: true
+        run: mypy src/
+
+      - name: Run pytest
+        run: pytest tests/ -v --cov=src/joetheismannsleg --cov-report=term-missing
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,6 +84,11 @@ jobs:
           python -m pip install .
 
       - name: Generate index.html using Python
+        env:
+          GITHUB_ACTIONS: "true"
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
         run: fantasy-league
 
       - name: Upload site artifact
