@@ -1,6 +1,7 @@
 """Modern HTML generation with template support."""
 
 import logging
+import re
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -10,6 +11,73 @@ from jinja2 import Template
 from ..models import Matchup, TeamRecord
 
 logger = logging.getLogger(__name__)
+
+
+def add_data_labels_to_table(table_html: str) -> str:
+    """
+    Add data-label attributes to table cells for mobile responsiveness.
+    
+    This allows the CSS ::before pseudo-element to display column headers
+    on mobile devices using the data-label attribute.
+    
+    Args:
+        table_html: HTML string containing a table element
+        
+    Returns:
+        Modified HTML string with data-label attributes added to td elements
+    """
+    # Extract column headers from the table
+    header_match = re.search(r'<thead>.*?<tr[^>]*>(.*?)</tr>.*?</thead>', table_html, re.DOTALL)
+    if not header_match:
+        return table_html
+    
+    headers_html = header_match.group(1)
+    # Extract all header text from th elements
+    headers = re.findall(r'<th[^>]*>([^<]*)</th>', headers_html)
+    
+    if not headers:
+        return table_html
+    
+    # Find the tbody and process rows
+    tbody_match = re.search(r'<tbody>(.*?)</tbody>', table_html, re.DOTALL)
+    if not tbody_match:
+        return table_html
+    
+    tbody_html = tbody_match.group(1)
+    
+    # Process each row in tbody
+    rows = re.findall(r'<tr[^>]*>(.*?)</tr>', tbody_html, re.DOTALL)
+    modified_tbody = tbody_html
+    
+    for row_content in rows:
+        # Find all cells in this row
+        cells = re.findall(r'<td[^>]*>.*?</td>', row_content, re.DOTALL)
+        
+        if not cells:
+            continue
+        
+        # Add data-labels to each cell
+        modified_row = row_content
+        for cell_idx, cell in enumerate(cells):
+            if cell_idx < len(headers) and 'data-label=' not in cell:
+                label = headers[cell_idx].strip()
+                new_cell = re.sub(
+                    r'<td([^>]*)>',
+                    lambda m: f'<td{m.group(1)} data-label="{label}">',
+                    cell,
+                    count=1
+                )
+                modified_row = modified_row.replace(cell, new_cell, 1)
+        
+        # Replace the row in tbody
+        modified_tbody = modified_tbody.replace(row_content, modified_row, 1)
+    
+    # Replace tbody in the original HTML
+    result = table_html.replace(tbody_match.group(0), f'<tbody>{modified_tbody}</tbody>', 1)
+    
+    return result
+    
+    return result
 
 # CSS styling (extracted to constant for easier maintenance)
 STYLESHEET = """
@@ -288,6 +356,187 @@ tbody tr:nth-child(odd) {
 
 .scroll-wrapper table {
     margin: 0;
+}
+
+/* Mobile-first responsive design */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    .container {
+        padding: 20px;
+        border-radius: 8px;
+    }
+
+    h1 {
+        font-size: 1.8em;
+        margin-bottom: 5px;
+    }
+
+    h3 {
+        font-size: 1.1em;
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+
+    .season-year {
+        font-size: 0.95em;
+        margin-bottom: 20px;
+    }
+
+    .controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    label {
+        font-size: 0.95em;
+        width: 100%;
+        text-align: left;
+    }
+
+    select {
+        width: 100%;
+        min-width: unset;
+        padding: 8px 12px;
+        font-size: 0.95em;
+    }
+
+    table {
+        margin: 15px 0;
+        font-size: 0.85em;
+    }
+
+    thead {
+        display: none;
+    }
+
+    tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        overflow: hidden;
+        background: white;
+    }
+
+    tbody tr:nth-child(odd) {
+        background-color: white;
+    }
+
+    tbody tr:hover {
+        transform: none;
+        background-color: #f5f5f5;
+    }
+
+    td {
+        display: block;
+        padding: 10px 12px;
+        border-bottom: 1px solid #e0e0e0;
+        border-left: 3px solid #013369;
+        text-align: right;
+    }
+
+    td:last-child {
+        border-bottom: none;
+    }
+
+    td:before {
+        content: attr(data-label);
+        float: left;
+        font-weight: 700;
+        color: #013369;
+        text-transform: uppercase;
+        font-size: 0.75em;
+        letter-spacing: 0.5px;
+    }
+
+    .team-name {
+        display: inline;
+    }
+
+    .bye-week {
+        font-size: 0.9em;
+    }
+
+    .info-tabs {
+        gap: 5px;
+    }
+
+    .tab-button {
+        padding: 8px 12px;
+        font-size: 0.85em;
+        border-width: 1px;
+    }
+
+    .stats-info {
+        padding: 12px;
+        border-left-width: 3px;
+    }
+
+    .stats-info p {
+        font-size: 0.9em;
+    }
+
+    .footer {
+        margin-top: 20px;
+        font-size: 0.85em;
+        padding-top: 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 8px;
+    }
+
+    .container {
+        padding: 15px;
+    }
+
+    h1 {
+        font-size: 1.4em;
+    }
+
+    h3 {
+        font-size: 1em;
+        margin-top: 15px;
+    }
+
+    .controls {
+        gap: 8px;
+    }
+
+    label {
+        font-size: 0.9em;
+    }
+
+    select {
+        padding: 6px 10px;
+        font-size: 0.9em;
+    }
+
+    table {
+        font-size: 0.8em;
+    }
+
+    td {
+        padding: 8px 10px;
+    }
+
+    .score {
+        font-size: 1em;
+    }
+
+    .tab-button {
+        padding: 6px 10px;
+        font-size: 0.8em;
+    }
+
+    .tab-button:hover {
+        transform: none;
+    }
 }
 """
 
@@ -690,6 +939,7 @@ def generate_html(
                     table_html = df.to_html(index=False, classes="matchup-table")
                     table_html = table_html.replace("<td>", '<td class="cell">')
                     table_html = table_html.replace("<th>", '<th class="header-cell">')
+                    table_html = add_data_labels_to_table(table_html)
                     html += table_html
                     html_parts.append(html)
             
@@ -714,6 +964,7 @@ def generate_html(
                     table_html = df.to_html(index=False, classes="matchup-table")
                     table_html = table_html.replace("<td>", '<td class="cell">')
                     table_html = table_html.replace("<th>", '<th class="header-cell">')
+                    table_html = add_data_labels_to_table(table_html)
                     html += table_html
                     html_parts.append(html)
             
@@ -730,6 +981,7 @@ def generate_html(
         html = standings_df.to_html(index=False, classes="standings-table")
         html = html.replace("<td>", '<td class="cell">')
         html = html.replace("<th>", '<th class="header-cell">')
+        html = add_data_labels_to_table(html)
         standings_by_year[season] = html
 
     # Historical standings
@@ -741,6 +993,7 @@ def generate_html(
                 html = standings_df.to_html(index=False, classes="standings-table")
                 html = html.replace("<td>", '<td class="cell">')
                 html = html.replace("<th>", '<th class="header-cell">')
+                html = add_data_labels_to_table(html)
                 standings_by_year[year_int] = html
 
     # Generate luck stats data (keep as JSON for JavaScript processing)
