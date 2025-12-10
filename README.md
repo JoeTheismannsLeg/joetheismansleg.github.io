@@ -268,22 +268,6 @@ Current tests verify:
 - JSON serialization for JavaScript data
 - HTML element presence and structure
 
-## Troubleshooting
-
-### HTML not generating
-- Check that the Sleeper league ID is correct
-- Verify network connectivity to api.sleeper.app
-- Check GitHub Actions logs for API errors
-
-### Missing historical data
-- Ensure all league IDs in the `previous_league_id` chain are accessible
-- Verify no gaps in season years
-
-### Postseason matchups not showing
-- Check team names in `postseason_matchups.json` match Sleeper exactly
-- Verify JSON syntax is valid
-- Ensure weeks are between 14-17
-
 ## API Reference
 
 ### Sleeper.app Endpoints Used
@@ -307,9 +291,3 @@ Contributions are welcome! Please:
 ## Support
 
 For issues, questions, or feature requests, please open an issue on GitHub.
-
----
-
-**Last Updated:** December 2025  
-**Current Season:** 2025  
-**Available Seasons:** 2019-2025
