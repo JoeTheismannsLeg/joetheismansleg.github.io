@@ -48,16 +48,21 @@ def get_git_info() -> Tuple[str, str, str]:
 
 
 
-def load_postseason_matchups(season: int, regular_matchups: Optional[List[Matchup]] = None) -> List[Matchup]:
+def load_postseason_matchups(
+    season: int,
+    client: Optional["LeagueClient"] = None,  # type: ignore
+    regular_matchups: Optional[List[Matchup]] = None,
+) -> List[Matchup]:
     """
     Load postseason matchups from JSON file for a specific season.
 
     Args:
         season: Season year (e.g., 2025)
-        regular_matchups: Optional list of regular season matchups to look up scores from
+        client: Optional LeagueClient to resolve display names to team names
+        regular_matchups: Optional list of regular season matchups to look up scores
 
     Returns:
-        List of Matchup objects for postseason weeks with scores populated from regular matchups
+        List of Matchup objects for postseason weeks with team names and scores populated from regular matchups
     """
     # Data file is now in the package data directory
     postseason_file = Path(__file__).parent / "data" / "postseason_matchups.json"
@@ -73,7 +78,19 @@ def load_postseason_matchups(season: int, regular_matchups: Optional[List[Matchu
         if season_str not in data:
             return []
 
-        # Build a map of (week, team_name) -> score for quick lookup
+        # Build display_name to team_name mapping from client
+        display_name_to_team_name = {}
+        if client:
+            # client.users_mapping: user_id -> team_name
+            # client.league_info.users: user_id -> display_name
+            # We need to invert: display_name -> team_name
+            for user_id, display_name in client.league_info.users.items():
+                team_name = client.users_mapping.get(user_id)
+                if team_name:
+                    display_name_to_team_name[display_name] = team_name
+
+        # Build mappings from regular matchups for score lookup
+        # Map: (week, team_name) -> score
         score_map = {}
         if regular_matchups:
             for m in regular_matchups:
@@ -83,10 +100,14 @@ def load_postseason_matchups(season: int, regular_matchups: Optional[List[Matchu
         matchups = []
         for entry in data[season_str]:
             week = entry["week"]
-            team_1 = entry["team_1"]
-            team_2 = entry["team_2"]
+            display_name_1 = entry["team_1"]
+            display_name_2 = entry["team_2"]
 
-            # Look up scores from regular matchups
+            # Resolve display names to team names
+            team_1 = display_name_to_team_name.get(display_name_1, display_name_1)
+            team_2 = display_name_to_team_name.get(display_name_2, display_name_2)
+
+            # Look up scores using team names
             score_1 = score_map.get((week, team_1), 0.0)
             score_2 = score_map.get((week, team_2), 0.0)
 
@@ -194,7 +215,7 @@ def main() -> int:
 
         # Load postseason matchups for current season
         logger.info("Loading postseason matchups...")
-        postseason_matchups = load_postseason_matchups(current_season, matchups)
+        postseason_matchups = load_postseason_matchups(current_season, client=client, regular_matchups=matchups)
         logger.info(f"Loaded {len(postseason_matchups)} postseason matchups")
 
         # Merge postseason matchups with regular matchups
