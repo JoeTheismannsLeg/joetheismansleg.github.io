@@ -76,8 +76,54 @@ def add_data_labels_to_table(table_html: str) -> str:
     result = table_html.replace(tbody_match.group(0), f'<tbody>{modified_tbody}</tbody>', 1)
     
     return result
+
+
+def generate_matchup_cards(matchups: List[Matchup], week: int) -> str:
+    """
+    Generate mobile-friendly matchup cards for a list of matchups.
     
-    return result
+    Each card displays:
+    - Header: Week number or matchup name
+    - Two columns: Team 1 / Team 2
+    - Two columns: Score 1 / Score 2
+    
+    Args:
+        matchups: List of Matchup objects
+        week: Week number for header
+        
+    Returns:
+        HTML string containing matchup cards
+    """
+    if not matchups:
+        return ""
+    
+    cards_html = ""
+    
+    for matchup in matchups:
+        # Determine header: use matchup name if available (postseason), otherwise use week
+        header = matchup.name if matchup.name else f"Week {week}"
+        
+        # Build card HTML
+        card_html = f'''<div class="matchup-card">
+    <div class="matchup-card-header">{header}</div>
+    <div class="matchup-card-body">
+        <div class="matchup-card-row">
+            <div class="matchup-card-team">
+                <div class="matchup-card-team-name">{matchup.team_1}</div>
+            </div>
+            <div class="matchup-card-team">
+                <div class="matchup-card-team-name">{matchup.team_2}</div>
+            </div>
+        </div>
+        <div class="matchup-card-row">
+            <div class="matchup-card-score">{matchup.score_1:.2f}</div>
+            <div class="matchup-card-score">{matchup.score_2:.2f}</div>
+        </div>
+    </div>
+</div>'''
+        cards_html += card_html
+    
+    return cards_html
 
 # CSS styling (extracted to constant for easier maintenance)
 STYLESHEET = """
@@ -358,6 +404,58 @@ tbody tr:nth-child(odd) {
     margin: 0;
 }
 
+/* Matchup card styling for mobile */
+.matchup-card {
+    display: none;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    margin-bottom: 15px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.matchup-card-header {
+    background: linear-gradient(135deg, #013369 0%, #1a4d8f 100%);
+    color: white;
+    padding: 12px 15px;
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.matchup-card-body {
+    padding: 15px;
+}
+
+.matchup-card-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.matchup-card-row:last-child {
+    margin-bottom: 0;
+}
+
+.matchup-card-team {
+    text-align: left;
+}
+
+.matchup-card-team-name {
+    font-weight: 600;
+    color: #013369;
+    margin-bottom: 5px;
+    word-break: break-word;
+}
+
+.matchup-card-score {
+    text-align: right;
+    font-weight: 700;
+    color: #d50a0a;
+    font-size: 1.1em;
+}
+
 /* Mobile-first responsive design */
 @media (max-width: 768px) {
     body {
@@ -450,6 +548,16 @@ tbody tr:nth-child(odd) {
         text-transform: uppercase;
         font-size: 0.75em;
         letter-spacing: 0.5px;
+    }
+
+    /* Show matchup cards on mobile */
+    .matchup-card {
+        display: block;
+    }
+
+    /* Hide tables on mobile when cards are shown */
+    table {
+        display: none;
     }
 
     .team-name {
@@ -941,6 +1049,10 @@ def generate_html(
                     table_html = table_html.replace("<th>", '<th class="header-cell">')
                     table_html = add_data_labels_to_table(table_html)
                     html += table_html
+                    
+                    # Add matchup cards for mobile
+                    html += generate_matchup_cards(regular_matchups, week)
+                    
                     html_parts.append(html)
             
             # Generate postseason matchups table if present
@@ -966,6 +1078,10 @@ def generate_html(
                     table_html = table_html.replace("<th>", '<th class="header-cell">')
                     table_html = add_data_labels_to_table(table_html)
                     html += table_html
+                    
+                    # Add matchup cards for mobile
+                    html += generate_matchup_cards(postseason_matchups, week)
+                    
                     html_parts.append(html)
             
             # Combine all HTML for this week
