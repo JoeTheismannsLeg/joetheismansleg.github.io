@@ -58,7 +58,8 @@ def load_postseason_matchups(season: int) -> List[Matchup]:
     Returns:
         List of Matchup objects for postseason weeks
     """
-    postseason_file = Path(__file__).parent.parent.parent / "data" / "postseason_matchups.json"
+    # Data file is now in the package data directory
+    postseason_file = Path(__file__).parent / "data" / "postseason_matchups.json"
 
     try:
         if not postseason_file.exists():
