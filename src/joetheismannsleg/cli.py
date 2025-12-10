@@ -48,15 +48,16 @@ def get_git_info() -> Tuple[str, str, str]:
 
 
 
-def load_postseason_matchups(season: int) -> List[Matchup]:
+def load_postseason_matchups(season: int, regular_matchups: Optional[List[Matchup]] = None) -> List[Matchup]:
     """
     Load postseason matchups from JSON file for a specific season.
 
     Args:
         season: Season year (e.g., 2025)
+        regular_matchups: Optional list of regular season matchups to look up scores from
 
     Returns:
-        List of Matchup objects for postseason weeks
+        List of Matchup objects for postseason weeks with scores populated from regular matchups
     """
     # Data file is now in the package data directory
     postseason_file = Path(__file__).parent / "data" / "postseason_matchups.json"
@@ -72,15 +73,30 @@ def load_postseason_matchups(season: int) -> List[Matchup]:
         if season_str not in data:
             return []
 
+        # Build a map of (week, team_name) -> score for quick lookup
+        score_map = {}
+        if regular_matchups:
+            for m in regular_matchups:
+                score_map[(m.week, m.team_1)] = m.score_1
+                score_map[(m.week, m.team_2)] = m.score_2
+
         matchups = []
         for entry in data[season_str]:
+            week = entry["week"]
+            team_1 = entry["team_1"]
+            team_2 = entry["team_2"]
+
+            # Look up scores from regular matchups
+            score_1 = score_map.get((week, team_1), 0.0)
+            score_2 = score_map.get((week, team_2), 0.0)
+
             matchup = Matchup(
                 matchup_id=None,  # Postseason matchups don't have API matchup_id
-                week=entry["week"],
-                team_1=entry["team_1"],
-                score_1=0.0,  # Scores will be set later when data is available
-                team_2=entry["team_2"],
-                score_2=0.0,
+                week=week,
+                team_1=team_1,
+                score_1=score_1,
+                team_2=team_2,
+                score_2=score_2,
                 name=entry.get("name"),  # Store the postseason matchup name
             )
             matchups.append(matchup)
@@ -178,7 +194,7 @@ def main() -> int:
 
         # Load postseason matchups for current season
         logger.info("Loading postseason matchups...")
-        postseason_matchups = load_postseason_matchups(current_season)
+        postseason_matchups = load_postseason_matchups(current_season, matchups)
         logger.info(f"Loaded {len(postseason_matchups)} postseason matchups")
 
         # Merge postseason matchups with regular matchups
