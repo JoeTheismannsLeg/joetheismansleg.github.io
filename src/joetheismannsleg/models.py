@@ -71,16 +71,24 @@ class Matchup:
         """Check if this matchup is incomplete."""
         return self.team_2 == "UNPLAYED/INCOMPLETE"
 
-    def is_postseason(self, postseason_weeks: tuple = (14, 15, 16, 17)) -> bool:
-        """Check if this is a postseason matchup.
+    def is_postseason(self) -> bool:
+        """Check if this is a custom JTL postseason matchup.
+        
+        Returns:
+            True if matchup has a custom name (JTL format)
+        """
+        return self.name is not None
+    
+    def is_postseason_week(self, postseason_weeks: tuple = (14, 15, 16, 17)) -> bool:
+        """Check if this matchup is in a postseason week.
         
         Args:
             postseason_weeks: Tuple of week numbers considered postseason
             
         Returns:
-            True if matchup has a custom name (JTL format) or is in postseason weeks
+            True if week is in postseason weeks range
         """
-        return self.name is not None or self.week in postseason_weeks
+        return self.week in postseason_weeks
 
     def winner(self) -> Optional[int]:
         """
