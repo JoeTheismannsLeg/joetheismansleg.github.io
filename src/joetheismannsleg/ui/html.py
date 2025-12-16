@@ -1126,7 +1126,10 @@ def generate_html(
     for week in sorted(matchups_by_week.keys(), reverse=True):
         week_matches = matchups_by_week[week]
         if any(not m.is_incomplete() and not m.is_bye() for m in week_matches):
-            if any(m.score_1 > 0 or m.score_2 > 0 for m in week_matches if not m.is_bye()):
+            # Check if week has scores OR has postseason matchups (which should display even with zero scores)
+            has_scores = any(m.score_1 > 0 or m.score_2 > 0 for m in week_matches if not m.is_bye())
+            has_postseason = any(m.is_postseason() for m in week_matches)
+            if has_scores or has_postseason:
                 active_week = week
                 break
 
