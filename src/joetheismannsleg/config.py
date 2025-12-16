@@ -13,6 +13,7 @@ class LeagueConfig:
     cache_dir: Path = Path(".cache")
     request_timeout: int = 30
     max_retries: int = 3
+    postseason_weeks: tuple = (14, 15, 16, 17)  # Weeks considered postseason
 
     def __post_init__(self):
         """Validate configuration."""
