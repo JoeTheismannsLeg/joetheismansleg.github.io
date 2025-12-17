@@ -788,6 +788,70 @@ tbody tr:nth-child(odd) {
     overflow: hidden;
 }
 
+/* Bracket table styling for matchup display */
+.bracket-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+    background: white;
+    font-size: 0.9em;
+}
+
+.bracket-table thead th {
+    background: #f0f0f0;
+    padding: 6px 8px;
+    font-size: 0.85em;
+    text-align: center;
+    border: 1px solid #ddd;
+}
+
+.bracket-table thead th.record-col {
+    text-align: left;
+    min-width: 200px;
+}
+
+.bracket-table tbody td {
+    padding: 8px;
+    text-align: center;
+    border: 1px solid #ddd;
+    font-size: 0.9em;
+}
+
+.bracket-table tbody td.team-cell {
+    text-align: left;
+    font-weight: 500;
+}
+
+.bracket-table tbody tr.winner {
+    background-color: #fff3cd;
+}
+
+.bracket-table tbody tr.winner td {
+    font-weight: 600;
+}
+
+.team-icon {
+    margin-right: 5px;
+    font-size: 1.1em;
+}
+
+.seed-number {
+    font-weight: 700;
+    color: #013369;
+    margin-right: 3px;
+}
+
+.team-name {
+    color: #333;
+}
+
+.matchup-label {
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 8px;
+    font-size: 0.95em;
+}
+
 @media (max-width: 768px) {
     .bracket {
         flex-direction: column;
@@ -1204,9 +1268,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         /**
          * Create HTML for a single bracket matchup card from pre-calculated data
          * @param {Object} matchup - Matchup object from Python
+         * @param {number} seed1 - Seed number for team 1 (optional)
+         * @param {number} seed2 - Seed number for team 2 (optional)
          * @returns {string} HTML string for the matchup card
          */
-        function createBracketMatchup(matchup) {
+        function createBracketMatchup(matchup, seed1, seed2) {
             if (!matchup || !matchup.team_1) {
                 return `<div class="bracket-matchup">
                     <div class="matchup-header">${matchup?.label || 'TBD'}</div>
@@ -1219,41 +1285,96 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 </div>`;
             }
             
-            const multiWeekClass = matchup.is_multi_week ? 'multi-week' : '';
-            const multiWeekHeader = matchup.is_multi_week ? 'multi-week' : '';
-            const weeksLabel = matchup.is_multi_week ? ` (Weeks ${matchup.weeks.join('-')})` : '';
+            // Build individual week score cells
+            const weeks = matchup.weeks || [];
+            const weekScores1 = matchup.week_scores_1 || {};
+            const weekScores2 = matchup.week_scores_2 || {};
             
-            return `<div class="bracket-matchup ${multiWeekClass}">
-                <div class="matchup-header ${multiWeekHeader}">${matchup.label}${weeksLabel}</div>
-                <div class="bracket-team ${matchup.winner === 1 ? 'winner' : ''}">
-                    <span class="bracket-team-name">${matchup.team_1}</span>
-                    <span class="bracket-score">${matchup.score_1.toFixed(2)}</span>
-                </div>
-                <div class="bracket-team ${matchup.winner === 2 ? 'winner' : ''}">
-                    <span class="bracket-team-name">${matchup.team_2}</span>
-                    <span class="bracket-score">${matchup.score_2.toFixed(2)}</span>
-                </div>
+            let scoreHeaders = '';
+            let scoreRow1 = '';
+            let scoreRow2 = '';
+            
+            weeks.forEach(week => {
+                scoreHeaders += `<th>${week}</th>`;
+                scoreRow1 += `<td>${(weekScores1[week] || 0).toFixed(2)}</td>`;
+                scoreRow2 += `<td>${(weekScores2[week] || 0).toFixed(2)}</td>`;
+            });
+            scoreHeaders += '<th>Total</th>';
+            scoreRow1 += `<td><strong>${matchup.score_1.toFixed(2)}</strong></td>`;
+            scoreRow2 += `<td><strong>${matchup.score_2.toFixed(2)}</strong></td>`;
+            
+            const seed1Display = seed1 ? `<span class="seed-number">#${seed1}</span> ` : '';
+            const seed2Display = seed2 ? `<span class="seed-number">#${seed2}</span> ` : '';
+            
+            return `<div class="bracket-matchup">
+                <div class="matchup-label">${matchup.label}</div>
+                <table class="bracket-table">
+                    <thead>
+                        <tr>
+                            <th class="record-col">( - )</th>
+                            ${scoreHeaders}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="${matchup.winner === 1 ? 'winner' : ''}">
+                            <td class="team-cell">
+                                <span class="team-icon">🏈</span>
+                                ${seed1Display}<span class="team-name">${matchup.team_1}</span>
+                            </td>
+                            ${scoreRow1}
+                        </tr>
+                        <tr class="${matchup.winner === 2 ? 'winner' : ''}">
+                            <td class="team-cell">
+                                <span class="team-icon">🏈</span>
+                                ${seed2Display}<span class="team-name">${matchup.team_2}</span>
+                            </td>
+                            ${scoreRow2}
+                        </tr>
+                    </tbody>
+                </table>
             </div>`;
         }
         
         /**
          * Build bracket HTML from pre-calculated bracket data
          * @param {Object} bracketData - Bracket structure with rounds calculated in Python
+         * @param {string} bracketType - 'championship' or 'consolation' for seed numbering
          * @returns {string} HTML string for the entire bracket
          */
-        function buildBracket(bracketData) {
+        function buildBracket(bracketData, bracketType = '') {
             if (!bracketData || !bracketData.rounds || bracketData.rounds.length === 0) {
                 return '<p style="text-align: center; color: #666;">No bracket data available.</p>';
             }
             
             let html = '<div class="bracket">';
             
-            bracketData.rounds.forEach(round => {
+            bracketData.rounds.forEach((round, roundIndex) => {
                 html += '<div class="bracket-round">';
                 html += `<div class="round-title">${round.title}</div>`;
                 
-                round.matchups.forEach(matchup => {
-                    html += createBracketMatchup(matchup);
+                round.matchups.forEach((matchup, matchupIndex) => {
+                    let seed1, seed2;
+                    
+                    // For championship bracket, add seed numbers to first round (semifinals)
+                    if (bracketType === 'championship' && roundIndex === 0) {
+                        if (matchupIndex === 0) {
+                            seed1 = 1; seed2 = 4; // Game 1: #1 vs #4
+                        } else if (matchupIndex === 1) {
+                            seed1 = 2; seed2 = 3; // Game 2: #2 vs #3
+                        }
+                    }
+                    // For consolation bracket, add seed numbers to first round
+                    else if (bracketType === 'consolation' && roundIndex === 0) {
+                        if (matchupIndex === 0) {
+                            seed1 = 7; seed2 = 10; // Game 1: #7 vs #10
+                        } else if (matchupIndex === 1) {
+                            seed1 = 5; seed2 = 6; // Game 2: #5 vs #6
+                        } else if (matchupIndex === 2) {
+                            seed1 = 8; seed2 = 9; // Game 3: #8 vs #9
+                        }
+                    }
+                    
+                    html += createBracketMatchup(matchup, seed1, seed2);
                 });
                 
                 html += '</div>';
@@ -1279,8 +1400,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const consolationData = consolationBrackets[selectedYearStr];
             
             // Render brackets (or show "no data" message)
-            championshipBracket.innerHTML = buildBracket(championshipData);
-            consolationBracket.innerHTML = buildBracket(consolationData);
+            championshipBracket.innerHTML = buildBracket(championshipData, 'championship');
+            consolationBracket.innerHTML = buildBracket(consolationData, 'consolation');
         }
         
         // Event listeners
@@ -1311,27 +1432,50 @@ def combine_multi_week_matchup(matchups: List[Dict]) -> Optional[Dict]:
     Combine multi-week matchups by summing scores across weeks.
     
     For 2-week playoff matchups (e.g., playoff_g1 in weeks 14-15), this function
-    combines them into a single matchup with cumulative scores.
+    combines them into a single matchup with cumulative scores while preserving
+    individual week scores for display.
     
     Args:
         matchups: List of matchup dicts with the same name across multiple weeks
         
     Returns:
-        Combined matchup dict with total scores, or None if no matchups provided
+        Combined matchup dict with total scores and individual week scores, or None if no matchups provided
     """
     if not matchups:
         return None
     if len(matchups) == 1:
-        return matchups[0]
+        # Single week matchup
+        matchup = matchups[0].copy()
+        matchup["is_multi_week"] = False
+        matchup["weeks"] = [matchup["week"]]
+        matchup["week_scores_1"] = {matchup["week"]: matchup["score_1"]}
+        matchup["week_scores_2"] = {matchup["week"]: matchup["score_2"]}
+        # Determine winner
+        if matchup["score_1"] > matchup["score_2"]:
+            matchup["winner"] = 1
+        elif matchup["score_2"] > matchup["score_1"]:
+            matchup["winner"] = 2
+        else:
+            matchup["winner"] = 0
+        return matchup
+    
+    # Sort matchups by week
+    sorted_matchups = sorted(matchups, key=lambda m: m["week"])
+    
+    # Preserve individual week scores
+    week_scores_1 = {m["week"]: m["score_1"] for m in sorted_matchups}
+    week_scores_2 = {m["week"]: m["score_2"] for m in sorted_matchups}
     
     # Sum scores across all weeks for this matchup
     combined = {
-        "name": matchups[0]["name"],
-        "team_1": matchups[0]["team_1"],
-        "team_2": matchups[0]["team_2"],
-        "score_1": sum(m["score_1"] for m in matchups),
-        "score_2": sum(m["score_2"] for m in matchups),
-        "weeks": sorted([m["week"] for m in matchups]),
+        "name": sorted_matchups[0]["name"],
+        "team_1": sorted_matchups[0]["team_1"],
+        "team_2": sorted_matchups[0]["team_2"],
+        "score_1": sum(m["score_1"] for m in sorted_matchups),
+        "score_2": sum(m["score_2"] for m in sorted_matchups),
+        "weeks": sorted([m["week"] for m in sorted_matchups]),
+        "week_scores_1": week_scores_1,
+        "week_scores_2": week_scores_2,
         "is_multi_week": True,
         "winner": None  # Will be calculated next
     }
@@ -1435,36 +1579,24 @@ def calculate_consolation_bracket(year_matchups: List[Dict]) -> Dict:
                 matchups_by_name[m["name"]] = []
             matchups_by_name[m["name"]].append(m)
     
-    # Week 14 matchups (all single-week)
-    postseason_g1 = matchups_by_name.get("postseason_g1", [None])[0]
-    postseason_g2 = matchups_by_name.get("postseason_g2", [None])[0]
-    postseason_g3 = matchups_by_name.get("postseason_g3", [None])[0]
+    # Week 14 matchups (all single-week, but use combine for consistent structure)
+    postseason_g1 = combine_multi_week_matchup(matchups_by_name.get("postseason_g1", []))
+    postseason_g2 = combine_multi_week_matchup(matchups_by_name.get("postseason_g2", []))
+    postseason_g3 = combine_multi_week_matchup(matchups_by_name.get("postseason_g3", []))
     
     # Week 15 matchups (all single-week)
-    postseason_g4 = matchups_by_name.get("postseason_g4", [None])[0]
-    postseason_g5 = matchups_by_name.get("postseason_g5", [None])[0]
-    postseason_g6 = matchups_by_name.get("postseason_g6", [None])[0]
+    postseason_g4 = combine_multi_week_matchup(matchups_by_name.get("postseason_g4", []))
+    postseason_g5 = combine_multi_week_matchup(matchups_by_name.get("postseason_g5", []))
+    postseason_g6 = combine_multi_week_matchup(matchups_by_name.get("postseason_g6", []))
     
-    # Weeks 16-17 matchups (g7 is 2-week, others are 1-week)
+    # Weeks 15-16 matchups (g7 is 2-week, g8/g9 are 1-week)
     postseason_g7 = combine_multi_week_matchup(matchups_by_name.get("postseason_g7", []))
-    postseason_g8 = matchups_by_name.get("postseason_g8", [None])[0]
-    postseason_g9 = matchups_by_name.get("postseason_g9", [None])[0]
+    postseason_g8 = combine_multi_week_matchup(matchups_by_name.get("postseason_g8", []))
+    postseason_g9 = combine_multi_week_matchup(matchups_by_name.get("postseason_g9", []))
     
     # Week 17 only matchups
-    postseason_g10 = matchups_by_name.get("postseason_g10", [None])[0]
-    postseason_g11 = matchups_by_name.get("postseason_g11", [None])[0]
-    
-    # Add winner info for single-week matchups
-    for matchup in [postseason_g1, postseason_g2, postseason_g3, postseason_g4, 
-                    postseason_g5, postseason_g6, postseason_g8, postseason_g9, 
-                    postseason_g10, postseason_g11]:
-        if matchup and "winner" not in matchup:
-            if matchup.get("score_1", 0) > matchup.get("score_2", 0):
-                matchup["winner"] = 1
-            elif matchup.get("score_2", 0) > matchup.get("score_1", 0):
-                matchup["winner"] = 2
-            else:
-                matchup["winner"] = 0
+    postseason_g10 = combine_multi_week_matchup(matchups_by_name.get("postseason_g10", []))
+    postseason_g11 = combine_multi_week_matchup(matchups_by_name.get("postseason_g11", []))
     
     # Structure bracket data
     return {
