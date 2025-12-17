@@ -647,129 +647,79 @@ tbody tr:nth-child(odd) {
     }
 }
 
-/* Bracket Styles */
+/* Bracket Styles - Template Design */
 .brackets-container {
     display: flex;
     flex-direction: column;
-    gap: 50px;
+    gap: 60px;
     margin-top: 30px;
 }
 
 .bracket-section {
-    background: #f8f9fa;
-    border-radius: 12px;
-    padding: 30px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    position: relative;
 }
 
 .bracket-title {
     text-align: center;
-    color: #013369;
-    font-size: 1.8em;
+    font-size: 2em;
     font-weight: 700;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: linear-gradient(135deg, #d50a0a 0%, #013369 100%);
+    color: white;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
+    border-radius: 8px;
 }
 
 .bracket {
     display: flex;
-    justify-content: space-around;
-    align-items: center;
-    gap: 40px;
+    justify-content: space-evenly;
+    align-items: stretch;
+    gap: 60px;
+    padding: 30px 10px;
+    position: relative;
     overflow-x: auto;
-    padding: 20px;
 }
 
 .bracket-round {
     display: flex;
     flex-direction: column;
-    justify-content: space-around;
-    gap: 30px;
-    min-width: 200px;
+    justify-content: space-evenly;
+    gap: 20px;
+    flex: 1;
+    position: relative;
 }
 
 .round-title {
     text-align: center;
     font-weight: 700;
-    color: #666;
-    font-size: 0.9em;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 15px;
+    color: #000;
+    font-size: 1.1em;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #ddd;
 }
 
 .bracket-matchup {
     background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    border: 2px solid #e0e0e0;
-    min-width: 200px;
-}
-
-.bracket-matchup.multi-week {
-    border-color: #d50a0a;
-    border-width: 3px;
-}
-
-.matchup-header {
-    background: linear-gradient(135deg, #013369 0%, #1a4d8f 100%);
-    color: white;
-    padding: 8px 12px;
-    font-size: 0.85em;
-    font-weight: 600;
-    text-align: center;
-}
-
-.matchup-header.multi-week {
-    background: linear-gradient(135deg, #d50a0a 0%, #ff4444 100%);
-}
-
-.bracket-team {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 15px;
-    border-bottom: 1px solid #e0e0e0;
-    transition: all 0.2s ease;
-}
-
-.bracket-team:last-child {
-    border-bottom: none;
-}
-
-.bracket-team:hover {
-    background: #f5f5f5;
-}
-
-.bracket-team.winner {
-    background: #fff3cd;
-    font-weight: 700;
-}
-
-.bracket-team.winner .bracket-team-name {
-    color: #d50a0a;
-}
-
-.bracket-team-name {
-    font-weight: 600;
-    color: #333;
-    flex: 1;
-}
-
-.bracket-score {
-    font-weight: 700;
-    font-size: 1.1em;
-    color: #013369;
-    margin-left: 10px;
-}
-
-.bracket-connector {
-    width: 40px;
-    height: 2px;
-    background: #ccc;
+    border: 2px solid #000;
     position: relative;
+    margin: 10px 0;
+}
+
+.matchup-label {
+    position: absolute;
+    left: -40px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-weight: 700;
+    font-size: 1.2em;
+    color: #000;
 }
 
 /* Seeding table styling */
@@ -788,38 +738,43 @@ tbody tr:nth-child(odd) {
     overflow: hidden;
 }
 
-/* Bracket table styling for matchup display */
+/* Bracket table styling - Template Design */
 .bracket-table {
     width: 100%;
     border-collapse: collapse;
     margin: 0;
     background: white;
-    font-size: 0.9em;
+    font-size: 0.85em;
 }
 
 .bracket-table thead th {
-    background: #f0f0f0;
-    padding: 6px 8px;
-    font-size: 0.85em;
+    background: white;
+    padding: 4px 6px;
+    font-size: 0.75em;
     text-align: center;
-    border: 1px solid #ddd;
+    border: 1px solid #000;
+    font-weight: 600;
 }
 
 .bracket-table thead th.record-col {
-    text-align: left;
-    min-width: 200px;
+    text-align: center;
+    width: 200px;
+    font-weight: 400;
 }
 
 .bracket-table tbody td {
-    padding: 8px;
+    padding: 6px 8px;
     text-align: center;
-    border: 1px solid #ddd;
-    font-size: 0.9em;
+    border: 1px solid #000;
+    font-size: 0.8em;
+    background: #f5f5f5;
 }
 
 .bracket-table tbody td.team-cell {
     text-align: left;
-    font-weight: 500;
+    font-weight: 400;
+    background: white;
+    padding-left: 8px;
 }
 
 .bracket-table tbody tr.winner {
@@ -827,29 +782,46 @@ tbody tr:nth-child(odd) {
 }
 
 .bracket-table tbody tr.winner td {
-    font-weight: 600;
+    font-weight: 700;
+    background-color: #fff3cd;
+}
+
+.bracket-table tbody tr.winner td.team-cell {
+    background-color: #fff3cd;
 }
 
 .team-icon {
-    margin-right: 5px;
-    font-size: 1.1em;
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    background: #ddd;
+    border: 1px solid #999;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+    text-align: center;
+    line-height: 30px;
+    font-size: 0.9em;
 }
 
 .seed-number {
     font-weight: 700;
-    color: #013369;
-    margin-right: 3px;
+    color: #000;
+    margin-right: 5px;
 }
 
 .team-name {
-    color: #333;
+    color: #000;
+    font-weight: 500;
 }
 
-.matchup-label {
-    font-weight: 600;
-    color: #555;
-    margin-bottom: 8px;
-    font-size: 0.95em;
+.game-label {
+    font-weight: 700;
+    font-size: 0.8em;
+    text-align: center;
+    padding: 2px 0;
+    border-bottom: 1px solid #000;
+    background: white;
 }
 
 @media (max-width: 768px) {
@@ -1270,18 +1242,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
          * @param {Object} matchup - Matchup object from Python
          * @param {number} seed1 - Seed number for team 1 (optional)
          * @param {number} seed2 - Seed number for team 2 (optional)
+         * @param {string} gameLabel - Game label like "Game 1" (optional)
          * @returns {string} HTML string for the matchup card
          */
-        function createBracketMatchup(matchup, seed1, seed2) {
+        function createBracketMatchup(matchup, seed1, seed2, gameLabel) {
             if (!matchup || !matchup.team_1) {
+                const label = gameLabel || matchup?.label || 'TBD';
                 return `<div class="bracket-matchup">
-                    <div class="matchup-header">${matchup?.label || 'TBD'}</div>
-                    <div class="bracket-team">
-                        <span class="bracket-team-name">TBD</span>
-                    </div>
-                    <div class="bracket-team">
-                        <span class="bracket-team-name">TBD</span>
-                    </div>
+                    ${gameLabel ? `<div class="game-label">${gameLabel}</div>` : ''}
+                    <table class="bracket-table">
+                        <tbody>
+                            <tr><td class="team-cell">TBD</td><td>-</td></tr>
+                        </tbody>
+                    </table>
                 </div>`;
             }
             
@@ -1296,18 +1269,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             
             weeks.forEach(week => {
                 scoreHeaders += `<th>${week}</th>`;
-                scoreRow1 += `<td>${(weekScores1[week] || 0).toFixed(2)}</td>`;
-                scoreRow2 += `<td>${(weekScores2[week] || 0).toFixed(2)}</td>`;
+                const score1 = weekScores1[week] || 0;
+                const score2 = weekScores2[week] || 0;
+                scoreRow1 += `<td>${score1 > 0 ? score1.toFixed(2) : '-'}</td>`;
+                scoreRow2 += `<td>${score2 > 0 ? score2.toFixed(2) : '-'}</td>`;
             });
             scoreHeaders += '<th>Total</th>';
-            scoreRow1 += `<td><strong>${matchup.score_1.toFixed(2)}</strong></td>`;
-            scoreRow2 += `<td><strong>${matchup.score_2.toFixed(2)}</strong></td>`;
+            scoreRow1 += `<td><strong>${matchup.score_1 > 0 ? matchup.score_1.toFixed(2) : '-'}</strong></td>`;
+            scoreRow2 += `<td><strong>${matchup.score_2 > 0 ? matchup.score_2.toFixed(2) : '-'}</strong></td>`;
             
-            const seed1Display = seed1 ? `<span class="seed-number">#${seed1}</span> ` : '';
-            const seed2Display = seed2 ? `<span class="seed-number">#${seed2}</span> ` : '';
+            // Format team display with seed and icon
+            const team1Display = seed1 
+                ? `<span class="seed-number">#${seed1} Seed</span>` 
+                : `${matchup.team_1 || 'TBD'}`;
+            const team2Display = seed2 
+                ? `<span class="seed-number">#${seed2} Seed</span>` 
+                : `${matchup.team_2 || 'TBD'}`;
             
             return `<div class="bracket-matchup">
-                <div class="matchup-label">${matchup.label}</div>
+                ${gameLabel ? `<div class="game-label">${gameLabel}</div>` : ''}
                 <table class="bracket-table">
                     <thead>
                         <tr>
@@ -1318,15 +1298,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <tbody>
                         <tr class="${matchup.winner === 1 ? 'winner' : ''}">
                             <td class="team-cell">
-                                <span class="team-icon">🏈</span>
-                                ${seed1Display}<span class="team-name">${matchup.team_1}</span>
+                                <span class="team-icon"></span>
+                                ${team1Display}
                             </td>
                             ${scoreRow1}
                         </tr>
                         <tr class="${matchup.winner === 2 ? 'winner' : ''}">
                             <td class="team-cell">
-                                <span class="team-icon">🏈</span>
-                                ${seed2Display}<span class="team-name">${matchup.team_2}</span>
+                                <span class="team-icon"></span>
+                                ${team2Display}
                             </td>
                             ${scoreRow2}
                         </tr>
@@ -1353,28 +1333,39 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 html += `<div class="round-title">${round.title}</div>`;
                 
                 round.matchups.forEach((matchup, matchupIndex) => {
-                    let seed1, seed2;
+                    let seed1, seed2, gameLabel;
                     
-                    // For championship bracket, add seed numbers to first round (semifinals)
+                    // For championship bracket, add seed numbers and game labels
                     if (bracketType === 'championship' && roundIndex === 0) {
                         if (matchupIndex === 0) {
-                            seed1 = 1; seed2 = 4; // Game 1: #1 vs #4
+                            seed1 = 1; seed2 = 4;
+                            gameLabel = 'Game 1';
                         } else if (matchupIndex === 1) {
-                            seed1 = 2; seed2 = 3; // Game 2: #2 vs #3
+                            seed1 = 2; seed2 = 3;
+                            gameLabel = 'Game 2';
                         }
+                    } else if (bracketType === 'championship' && roundIndex === 1) {
+                        gameLabel = matchupIndex === 0 ? 'Game 3' : 'Game 4';
                     }
-                    // For consolation bracket, add seed numbers to first round
+                    // For consolation bracket, add seed numbers and game labels
                     else if (bracketType === 'consolation' && roundIndex === 0) {
                         if (matchupIndex === 0) {
-                            seed1 = 7; seed2 = 10; // Game 1: #7 vs #10
+                            seed1 = 7; seed2 = 10;
+                            gameLabel = 'Game 1';
                         } else if (matchupIndex === 1) {
-                            seed1 = 5; seed2 = 6; // Game 2: #5 vs #6
+                            seed1 = 5; seed2 = 6;
+                            gameLabel = 'Game 2';
                         } else if (matchupIndex === 2) {
-                            seed1 = 8; seed2 = 9; // Game 3: #8 vs #9
+                            seed1 = 8; seed2 = 9;
+                            gameLabel = 'Game 3';
                         }
+                    } else if (bracketType === 'consolation') {
+                        // Game numbers for consolation bracket continue
+                        const gameNum = 4 + (roundIndex - 1) * 3 + matchupIndex;
+                        gameLabel = `Game ${gameNum}`;
                     }
                     
-                    html += createBracketMatchup(matchup, seed1, seed2);
+                    html += createBracketMatchup(matchup, seed1, seed2, gameLabel);
                 });
                 
                 html += '</div>';
