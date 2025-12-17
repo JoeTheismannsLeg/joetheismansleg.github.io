@@ -224,13 +224,13 @@ def main() -> int:
             for seed in playoff_seeds:
                 logger.info(
                     f"Seed #{seed['seed']}: {seed['team']} ({seed['wins']}-{seed['losses']}) "
-                    f"- {seed['points_for']:.2f} PF [{seed['division']} {seed['seed_type']}]"
+                    f"- {seed['pf']:.2f} PF [{seed['division']} {seed['seed_type']}]"
                 )
             logger.info("\nCONSOLATION BRACKET:")
             for seed in consolation_seeds:
                 logger.info(
                     f"Seed #{seed['seed']}: {seed['team']} ({seed['wins']}-{seed['losses']}) "
-                    f"- {seed['points_for']:.2f} PF [{seed['division']}]"
+                    f"- {seed['pf']:.2f} PF [{seed['division']}]"
                 )
             logger.info("=" * 80)
 
