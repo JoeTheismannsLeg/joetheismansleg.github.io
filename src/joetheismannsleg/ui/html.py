@@ -661,6 +661,7 @@ tbody tr:nth-child(odd) {
     border-radius: 8px;
     padding: 20px;
     position: relative;
+    overflow-x: auto;
 }
 
 .bracket-title {
@@ -678,20 +679,19 @@ tbody tr:nth-child(odd) {
 
 .bracket {
     display: flex;
-    justify-content: space-evenly;
-    align-items: stretch;
-    gap: 60px;
-    padding: 30px 10px;
+    justify-content: center;
+    align-items: center;
+    gap: 80px;
+    padding: 40px 20px;
     position: relative;
-    overflow-x: auto;
+    min-height: 600px;
 }
 
 .bracket-round {
     display: flex;
     flex-direction: column;
-    justify-content: space-evenly;
-    gap: 20px;
-    flex: 1;
+    justify-content: center;
+    gap: 80px;
     position: relative;
 }
 
@@ -700,26 +700,249 @@ tbody tr:nth-child(odd) {
     font-weight: 700;
     color: #000;
     font-size: 1.1em;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #ddd;
+    margin-bottom: 30px;
+    white-space: nowrap;
 }
 
 .bracket-matchup {
     background: white;
     border: 2px solid #000;
     position: relative;
-    margin: 10px 0;
+    min-width: 350px;
+    display: flex;
+    flex-direction: column;
 }
 
-.matchup-label {
-    position: absolute;
-    left: -40px;
-    top: 50%;
-    transform: translateY(-50%);
+.game-label {
     font-weight: 700;
-    font-size: 1.2em;
+    font-size: 0.85em;
+    text-align: center;
+    padding: 4px 0;
+    border-bottom: 2px solid #000;
+    background: white;
+}
+
+.matchup-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.matchup-team {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid #999;
+    min-height: 45px;
+}
+
+.matchup-team:last-child {
+    border-bottom: none;
+}
+
+.matchup-team.winner {
+    background-color: #fff3cd;
+    font-weight: 700;
+}
+
+.team-info {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+}
+
+.team-icon {
+    display: inline-block;
+    width: 35px;
+    height: 35px;
+    background: #e0e0e0;
+    border: 1px solid #999;
+    border-radius: 50%;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.seed-number {
+    font-weight: 700;
     color: #000;
+    margin-right: 5px;
+    white-space: nowrap;
+}
+
+.team-name {
+    color: #000;
+    font-weight: 500;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.team-scores {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.week-score {
+    min-width: 45px;
+    text-align: center;
+    font-size: 0.85em;
+    color: #333;
+}
+
+.total-score {
+    min-width: 50px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.9em;
+    color: #000;
+    border-left: 2px solid #999;
+    padding-left: 8px;
+}
+
+/* Bracket Connector Lines */
+.bracket-round::after {
+    content: '';
+    position: absolute;
+    right: -40px;
+    top: 50%;
+    width: 40px;
+    height: 2px;
+    background: #000;
+    transform: translateY(-50%);
+}
+
+.bracket-round:last-child::after {
+    display: none;
+}
+
+/* Vertical connectors for multiple matchups in same round */
+.bracket-round.has-multiple::before {
+    content: '';
+    position: absolute;
+    right: -40px;
+    top: 25%;
+    bottom: 25%;
+    width: 2px;
+    background: #000;
+}
+
+.game-label {
+    font-weight: 700;
+    font-size: 0.85em;
+    text-align: center;
+    padding: 4px 0;
+    border-bottom: 2px solid #000;
+    background: white;
+}
+
+.matchup-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.matchup-team {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid #999;
+    min-height: 45px;
+}
+
+.matchup-team:last-child {
+    border-bottom: none;
+}
+
+.matchup-team.winner {
+    background-color: #fff3cd;
+    font-weight: 700;
+}
+
+.team-info {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+}
+
+.team-icon {
+    display: inline-block;
+    width: 35px;
+    height: 35px;
+    background: #e0e0e0;
+    border: 1px solid #999;
+    border-radius: 50%;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.seed-number {
+    font-weight: 700;
+    color: #000;
+    margin-right: 5px;
+    white-space: nowrap;
+}
+
+.team-name {
+    color: #000;
+    font-weight: 500;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.team-scores {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.week-score {
+    min-width: 45px;
+    text-align: center;
+    font-size: 0.85em;
+    color: #333;
+}
+
+.total-score {
+    min-width: 50px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.9em;
+    color: #000;
+    border-left: 2px solid #999;
+    padding-left: 8px;
+}
+
+/* Bracket Connector Lines */
+.bracket-round::after {
+    content: '';
+    position: absolute;
+    right: -40px;
+    top: 50%;
+    width: 40px;
+    height: 2px;
+    background: #000;
+    transform: translateY(-50%);
+}
+
+.bracket-round:last-child::after {
+    display: none;
+}
+
+/* Vertical connectors for multiple matchups in same round */
+.bracket-round.has-multiple::before {
+    content: '';
+    position: absolute;
+    right: -40px;
+    top: 25%;
+    bottom: 25%;
+    width: 2px;
+    background: #000;
 }
 
 /* Seeding table styling */
@@ -1247,71 +1470,69 @@ HTML_TEMPLATE = """<!DOCTYPE html>
          */
         function createBracketMatchup(matchup, seed1, seed2, gameLabel) {
             if (!matchup || !matchup.team_1) {
-                const label = gameLabel || matchup?.label || 'TBD';
                 return `<div class="bracket-matchup">
                     ${gameLabel ? `<div class="game-label">${gameLabel}</div>` : ''}
-                    <table class="bracket-table">
-                        <tbody>
-                            <tr><td class="team-cell">TBD</td><td>-</td></tr>
-                        </tbody>
-                    </table>
+                    <div class="matchup-body">
+                        <div class="matchup-team">
+                            <div class="team-info">
+                                <span class="team-icon"></span>
+                                <span class="team-name">TBD</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>`;
             }
             
-            // Build individual week score cells
+            // Build individual week scores
             const weeks = matchup.weeks || [];
             const weekScores1 = matchup.week_scores_1 || {};
             const weekScores2 = matchup.week_scores_2 || {};
             
-            let scoreHeaders = '';
-            let scoreRow1 = '';
-            let scoreRow2 = '';
+            let weekScoresHtml1 = '';
+            let weekScoresHtml2 = '';
             
             weeks.forEach(week => {
-                scoreHeaders += `<th>${week}</th>`;
                 const score1 = weekScores1[week] || 0;
                 const score2 = weekScores2[week] || 0;
-                scoreRow1 += `<td>${score1 > 0 ? score1.toFixed(2) : '-'}</td>`;
-                scoreRow2 += `<td>${score2 > 0 ? score2.toFixed(2) : '-'}</td>`;
+                weekScoresHtml1 += `<div class="week-score">${score1 > 0 ? score1.toFixed(2) : '-'}</div>`;
+                weekScoresHtml2 += `<div class="week-score">${score2 > 0 ? score2.toFixed(2) : '-'}</div>`;
             });
-            scoreHeaders += '<th>Total</th>';
-            scoreRow1 += `<td><strong>${matchup.score_1 > 0 ? matchup.score_1.toFixed(2) : '-'}</strong></td>`;
-            scoreRow2 += `<td><strong>${matchup.score_2 > 0 ? matchup.score_2.toFixed(2) : '-'}</strong></td>`;
             
-            // Format team display with seed and icon
+            const total1 = matchup.score_1 > 0 ? matchup.score_1.toFixed(2) : '-';
+            const total2 = matchup.score_2 > 0 ? matchup.score_2.toFixed(2) : '-';
+            
+            // Format team display
             const team1Display = seed1 
                 ? `<span class="seed-number">#${seed1} Seed</span>` 
-                : `${matchup.team_1 || 'TBD'}`;
+                : `<span class="team-name">${matchup.team_1 || 'TBD'}</span>`;
             const team2Display = seed2 
                 ? `<span class="seed-number">#${seed2} Seed</span>` 
-                : `${matchup.team_2 || 'TBD'}`;
+                : `<span class="team-name">${matchup.team_2 || 'TBD'}</span>`;
             
             return `<div class="bracket-matchup">
                 ${gameLabel ? `<div class="game-label">${gameLabel}</div>` : ''}
-                <table class="bracket-table">
-                    <thead>
-                        <tr>
-                            <th class="record-col">( - )</th>
-                            ${scoreHeaders}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr class="${matchup.winner === 1 ? 'winner' : ''}">
-                            <td class="team-cell">
-                                <span class="team-icon"></span>
-                                ${team1Display}
-                            </td>
-                            ${scoreRow1}
-                        </tr>
-                        <tr class="${matchup.winner === 2 ? 'winner' : ''}">
-                            <td class="team-cell">
-                                <span class="team-icon"></span>
-                                ${team2Display}
-                            </td>
-                            ${scoreRow2}
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="matchup-body">
+                    <div class="matchup-team ${matchup.winner === 1 ? 'winner' : ''}">
+                        <div class="team-info">
+                            <span class="team-icon"></span>
+                            ${team1Display}
+                        </div>
+                        <div class="team-scores">
+                            ${weekScoresHtml1}
+                            <div class="total-score">${total1}</div>
+                        </div>
+                    </div>
+                    <div class="matchup-team ${matchup.winner === 2 ? 'winner' : ''}">
+                        <div class="team-info">
+                            <span class="team-icon"></span>
+                            ${team2Display}
+                        </div>
+                        <div class="team-scores">
+                            ${weekScoresHtml2}
+                            <div class="total-score">${total2}</div>
+                        </div>
+                    </div>
+                </div>
             </div>`;
         }
         
@@ -1329,7 +1550,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             let html = '<div class="bracket">';
             
             bracketData.rounds.forEach((round, roundIndex) => {
-                html += '<div class="bracket-round">';
+                const hasMultiple = round.matchups.length > 1;
+                html += `<div class="bracket-round ${hasMultiple ? 'has-multiple' : ''}">`;
                 html += `<div class="round-title">${round.title}</div>`;
                 
                 round.matchups.forEach((matchup, matchupIndex) => {
@@ -1361,8 +1583,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         }
                     } else if (bracketType === 'consolation') {
                         // Game numbers for consolation bracket continue
-                        const gameNum = 4 + (roundIndex - 1) * 3 + matchupIndex;
-                        gameLabel = `Game ${gameNum}`;
+                        const baseGame = roundIndex === 1 ? 4 : roundIndex === 2 ? 7 : roundIndex === 3 ? 10 : 0;
+                        gameLabel = `Game ${baseGame + matchupIndex}`;
                     }
                     
                     html += createBracketMatchup(matchup, seed1, seed2, gameLabel);
