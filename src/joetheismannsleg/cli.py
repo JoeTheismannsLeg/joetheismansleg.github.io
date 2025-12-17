@@ -9,11 +9,13 @@ from typing import Dict, List, Optional, Tuple
 
 from .calculations import (
     calculate_cumulative_luck_stats,
+    calculate_playoff_seeding,
     calculate_season_stats,
     calculate_standings,
 )
 from .config import LeagueConfig
 from .data import LeagueClient
+from .divisions import REGULAR_SEASON_WEEKS, get_divisions_for_year
 from .models import Matchup
 from .ui import generate_html
 
@@ -176,10 +178,61 @@ def main() -> int:
         available_seasons = client.get_available_seasons()
         logger.info(f"Found {len(available_seasons)} available seasons: {available_seasons}")
 
-        # Aggregate all data by season (matchups, standings, luck stats)
+        # Helper function to calculate seeding for a given year
+        def calculate_seeding_for_year(year: int, year_matchups: list, league_client):
+            """Calculate playoff seeding for a given year."""
+            try:
+                # Build username to team mapping
+                username_to_team = {}
+                for user_id, display_name in league_client.league_info.users.items():
+                    team_name = league_client.users_mapping.get(user_id)
+                    if team_name:
+                        username_to_team[display_name] = team_name
+                
+                # Get division assignments for this year
+                boats_teams, hoes_teams = get_divisions_for_year(year, username_to_team)
+                
+                if boats_teams and hoes_teams:
+                    # Filter to regular season only
+                    regular_season_matchups = [m for m in year_matchups if m.week in REGULAR_SEASON_WEEKS]
+                    
+                    if regular_season_matchups:
+                        return calculate_playoff_seeding(
+                            regular_season_matchups,
+                            boats_teams,
+                            hoes_teams
+                        )
+            except Exception as e:
+                logger.debug(f"Could not calculate seeding for {year}: {e}")
+            return None, None
+
+        # Aggregate all data by season (matchups, standings, luck stats, seeding)
         historical_matchups: Dict[int, list] = {current_season: matchups}
         historical_standings: Dict[int, list] = {current_season: standings}
         historical_luck_stats: Dict[int, list] = {current_season: luck_stats}
+        historical_playoff_seeds: Dict[int, list] = {}
+        historical_consolation_seeds: Dict[int, list] = {}
+        
+        # Calculate seeding for current season
+        playoff_seeds, consolation_seeds = calculate_seeding_for_year(current_season, matchups, client)
+        if playoff_seeds and consolation_seeds:
+            historical_playoff_seeds[current_season] = playoff_seeds
+            historical_consolation_seeds[current_season] = consolation_seeds
+            logger.info("\n" + "=" * 80)
+            logger.info(f"{current_season} PLAYOFF SEEDING (Based on Weeks 1-13)")
+            logger.info("=" * 80)
+            for seed in playoff_seeds:
+                logger.info(
+                    f"Seed #{seed['seed']}: {seed['team']} ({seed['wins']}-{seed['losses']}) "
+                    f"- {seed['points_for']:.2f} PF [{seed['division']} {seed['seed_type']}]"
+                )
+            logger.info("\nCONSOLATION BRACKET:")
+            for seed in consolation_seeds:
+                logger.info(
+                    f"Seed #{seed['seed']}: {seed['team']} ({seed['wins']}-{seed['losses']}) "
+                    f"- {seed['points_for']:.2f} PF [{seed['division']}]"
+                )
+            logger.info("=" * 80)
 
         for season in available_seasons:
             if season == current_season:
@@ -195,6 +248,15 @@ def main() -> int:
                         historical_matchups[season] = season_matchups
                         historical_standings[season] = season_standings
                         historical_luck_stats[season] = season_luck_stats
+                        
+                        # Calculate seeding for this season
+                        season_playoff_seeds, season_consolation_seeds = calculate_seeding_for_year(
+                            season, season_matchups, client
+                        )
+                        if season_playoff_seeds and season_consolation_seeds:
+                            historical_playoff_seeds[season] = season_playoff_seeds
+                            historical_consolation_seeds[season] = season_consolation_seeds
+                        
                         logger.info(
                             f"Processed {len(season_matchups)} matchups for season {season}"
                         )
@@ -245,6 +307,8 @@ def main() -> int:
             historical_matchups=historical_matchups_only if len(historical_matchups_only) > 0 else None,
             historical_standings=historical_standings_only if len(historical_standings_only) > 0 else None,
             historical_luck_stats=historical_luck_stats_only if len(historical_luck_stats_only) > 0 else None,
+            historical_playoff_seeds=historical_playoff_seeds if len(historical_playoff_seeds) > 0 else None,
+            historical_consolation_seeds=historical_consolation_seeds if len(historical_consolation_seeds) > 0 else None,
             git_branch=git_branch,
             git_commit=git_commit,
             git_commit_full=git_commit_full,
