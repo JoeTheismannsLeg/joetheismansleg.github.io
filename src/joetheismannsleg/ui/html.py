@@ -739,6 +739,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         
         let currentSortColumn = null;
         let currentSortDirection = 'asc';
+        let dataTablesSortColumn = null;
+        let dataTablesSortDirection = 'asc';
+        let dataTablesCurrentRows = [];
+
         
         function switchTab(tabName, evt) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -785,22 +789,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         function updateTableSelector() {
-            if (!tableSelector) return;
-
-            tableSelector.innerHTML = '';
-            const selectedYear = parseInt(yearSelector.value);
-            const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
-            const tableNames = Object.keys(yearData);
-
-            tableNames.forEach(name => {
-                const option = document.createElement('option');
-                option.value = name;
-                option.textContent = name;
-                tableSelector.appendChild(option);
-            });
-
-            displayDataTable();
+          if (!tableSelector) return;
+        
+          tableSelector.innerHTML = '';
+          const selectedYear = parseInt(yearSelector.value, 10);
+          const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
+        
+          const allowed = new Set([
+            "Head-to-Head Matrix",
+            "Top Scoring Placements",
+            "Average Opponent Scoring Rank",
+          ]);
+        
+          const tableNames = Object.keys(yearData).filter(name => allowed.has(name));
+        
+          tableNames.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            tableSelector.appendChild(option);
+          });
+        
+          displayDataTable();
         }
+
         
         function displayDataTable() {
           if (!dataTablesContainer || !tableSelector) return;
@@ -815,14 +827,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           const weekStr = String(selectedWeek);
         
           const rows = tableObj[weekStr] || tableObj["_season"] || [];
+
+          // reset per render so sorting isn't "sticky" across week/year/table changes
+          dataTablesSortColumn = null;
+          dataTablesSortDirection = 'asc';
         
           if (!rows || rows.length === 0) {
             dataTablesContainer.innerHTML = '<p>No data available for this table.</p>';
             return;
           }
         
-          dataTablesContainer.innerHTML = createSortableTable(rows);
-          attachTableListeners();
+          dataTablesCurrentRows = rows.slice(); // store a copy we can sort
+          dataTablesContainer.innerHTML = createSortableTable(rows, true); // true => sortable
+          attachDataTablesListeners();
         }
 
 
@@ -856,55 +873,61 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
             
             // Create sortable table from raw data
-            const table = createSortableTable(weekData);
+            const table = createSortableTable(weekData, true);
             statsContainer.innerHTML = table;
             attachTableListeners();
         }
         
-        function createSortableTable(data) {
-            if (data.length === 0) return '<p>No data available.</p>';
-            
-            const columns = Object.keys(data[0]);
-            let html = '<table class="stats-table"><thead><tr>';
-            
-            columns.forEach(col => {
-                html += `<th class="sortable" data-column="${col}">${col} <span class="sort-indicator"></span></th>`;
-            });
-            
-            html += '</tr></thead><tbody>';
-            
-            data.forEach(row => {
-                html += '<tr>';
-                columns.forEach(col => {
-                    let cellContent = row[col];
-                    let cellClass = 'cell';
-                    
-                    // Add styling for luck columns
-                    if (col === 'Luck') {
-                        const val = parseFloat(cellContent);
-                        if (val > 0.01) cellClass += ' luck-positive';
-                        else if (val < -0.01) cellClass += ' luck-negative';
-                        else cellClass += ' luck-neutral';
-                    }
-                    
-                    // Add styling for trend
-                    if (col === 'Trend') {
-                        if (cellContent === '↑') cellClass += ' trend-up';
-                        else if (cellContent === '↓') cellClass += ' trend-down';
-                        else if (cellContent === '→') cellClass += ' trend-stable';
-                    }
-                    
-                    html += `<td class="${cellClass}">${cellContent}</td>`;
-                });
-                html += '</tr>';
-            });
-            
-            html += '</tbody></table>';
-            return html;
-        }
+        function createSortableTable(data, makeSortable = false) {
+          if (data.length === 0) return '<p>No data available.</p>';
         
+          const columns = Object.keys(data[0]);
+          let html = '<table class="stats-table"><thead><tr>';
+        
+          columns.forEach(col => {
+            if (makeSortable) {
+              html += `<th class="sortable" data-column="${col}">${col} <span class="sort-indicator"></span></th>`;
+            } else {
+              html += `<th>${col}</th>`;
+            }
+          });
+        
+          html += '</tr></thead><tbody>';
+        
+          data.forEach(row => {
+            html += '<tr>';
+            columns.forEach(col => {
+              let cellContent = row[col];
+              let cellClass = 'cell';
+        
+              // Luck styling (used in Stats tab)
+              if (col === 'Luck') {
+                const val = parseFloat(cellContent);
+                if (val > 0.01) cellClass += ' luck-positive';
+                else if (val < -0.01) cellClass += ' luck-negative';
+                else cellClass += ' luck-neutral';
+              }
+        
+              // Trend styling (used in Stats tab)
+              if (col === 'Trend') {
+                if (cellContent === '↑') cellClass += ' trend-up';
+                else if (cellContent === '↓') cellClass += ' trend-down';
+                else if (cellContent === '→') cellClass += ' trend-stable';
+              }
+        
+              html += `<td class="${cellClass}">${cellContent ?? ''}</td>`;
+            });
+            html += '</tr>';
+          });
+        
+          html += '</tbody></table>';
+          return html;
+        }
+
+        
+        // Stats table sorting (scoped to Stats container so it doesn't hijack Data Tables)
         function attachTableListeners() {
-            document.querySelectorAll('th.sortable').forEach(th => {
+            document.querySelectorAll('#statsContainer th.sortable').forEach(th => {
                 th.addEventListener('click', () => sortTable(th));
             });
         }
@@ -932,8 +955,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 
                 // Handle percentage strings (e.g., "88.9%")
                 if (String(aVal).includes('%') && String(bVal).includes('%')) {
-                    const aNum = parseFloat(aVal.replace('%', ''));
-                    const bNum = parseFloat(bVal.replace('%', ''));
+                    const aNum = parseFloat(String(aVal).replace('%', ''));
+                    const bNum = parseFloat(String(bVal).replace('%', ''));
                     return currentSortDirection === 'asc' ? aNum - bNum : bNum - aNum;
                 }
                 
@@ -954,12 +977,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             });
             
             // Update display
-            const table = createSortableTable(weekData);
+            const table = createSortableTable(weekData, true);
             statsContainer.innerHTML = table;
             
             // Update sort indicators
-            document.querySelectorAll('th.sortable').forEach(header => {
+            document.querySelectorAll('#statsContainer th.sortable').forEach(header => {
                 const indicator = header.querySelector('.sort-indicator');
+                if (!indicator) return;
                 if (header.dataset.column === column) {
                     indicator.textContent = currentSortDirection === 'asc' ? '▲' : '▼';
                 } else {
@@ -969,7 +993,65 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             
             attachTableListeners();
         }
+
+        // Data Tables sorting (isolated)
+        function attachDataTablesListeners() {
+          document.querySelectorAll('#dataTablesContainer th.sortable').forEach(th => {
+            th.addEventListener('click', () => sortDataTables(th));
+          });
+        }
         
+        function sortDataTables(th) {
+          const column = th.dataset.column;
+        
+          // toggle direction
+          if (dataTablesSortColumn === column) {
+            dataTablesSortDirection = dataTablesSortDirection === 'asc' ? 'desc' : 'asc';
+          } else {
+            dataTablesSortColumn = column;
+            dataTablesSortDirection = 'asc';
+          }
+        
+          const sorted = dataTablesCurrentRows.slice();
+        
+          sorted.sort((a, b) => {
+            let aVal = a[column];
+            let bVal = b[column];
+        
+            // Prefer numeric sort when possible
+            const aNum = parseFloat(aVal);
+            const bNum = parseFloat(bVal);
+        
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+              return dataTablesSortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+            }
+        
+            // Otherwise sort as strings
+            const aStr = (aVal ?? '').toString();
+            const bStr = (bVal ?? '').toString();
+            return dataTablesSortDirection === 'asc'
+              ? aStr.localeCompare(bStr)
+              : bStr.localeCompare(aStr);
+          });
+        
+          // re-render
+          dataTablesCurrentRows = sorted;
+          dataTablesContainer.innerHTML = createSortableTable(sorted, true);
+        
+          // update indicator arrows
+          document.querySelectorAll('#dataTablesContainer th.sortable').forEach(header => {
+            const indicator = header.querySelector('.sort-indicator');
+            if (!indicator) return;
+            if (header.dataset.column === column) {
+              indicator.textContent = dataTablesSortDirection === 'asc' ? '▲' : '▼';
+            } else {
+              indicator.textContent = '';
+            }
+          });
+        
+          attachDataTablesListeners();
+        }
+
         // Event listeners
         yearSelector.addEventListener('change', () => {
             updateWeekSelector();
@@ -995,6 +1077,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>
 """
+
 
 
 
