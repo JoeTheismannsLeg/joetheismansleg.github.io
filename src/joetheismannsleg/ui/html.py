@@ -674,7 +674,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <button class="tab-button" onclick="switchTab('standings')">Standings</button>
             <button class="tab-button" onclick="switchTab('stats')">Behind the Cue Ball</button>
             <button class="tab-button" onclick="switchTab('dataTables', event)">Data Tables</button>
-
         </div>
         
         <div id="matchups" class="tab-content active">
@@ -701,15 +700,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         <div id="dataTables" class="tab-content">
             <div class="controls" style="justify-content: flex-start;">
-            <label for="tableSelector">Select Table:</label>
-            <select id="tableSelector"></select>
+                <label for="tableSelector">Select Table:</label>
+                <select id="tableSelector"></select>
             </div>
             <div class="scroll-wrapper">
                 <div id="dataTablesContainer"></div>
             </div>
         </div>
 
-        
         <div class="footer">
             <div>Last Updated: {{ timestamp }}</div>
             {% if git_branch and git_commit != 'n/a' %}
@@ -730,29 +728,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const activeSeason = {{ active_season }};
         const additionalTables = {{ additional_tables_json }};
 
-        
         const yearSelector = document.getElementById('yearSelector');
         const weekSelector = document.getElementById('weekSelector');
         const matchupContainer = document.getElementById('matchupContainer');
         const standingsContainer = document.getElementById('standingsContainer');
         const statsContainer = document.getElementById('statsContainer');
+
+        const tableSelector = document.getElementById('tableSelector');
+        const dataTablesContainer = document.getElementById('dataTablesContainer');
         
         let currentSortColumn = null;
         let currentSortDirection = 'asc';
         
-         function switchTab(tabName, evt) {
-          document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-          document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-          document.getElementById(tabName).classList.add('active');
-          (evt?.target || event.target).classList.add('active');
+        function switchTab(tabName, evt) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            (evt?.target || event.target).classList.add('active');
         
-          // NEW: ensure Data Tables renders when you open it
-          if (tabName === 'dataTables') {
-            updateTableSelector();
-            displayDataTable();
-          }
+            // ensure Data Tables renders when you open it
+            if (tabName === 'dataTables') {
+                updateTableSelector();
+                displayDataTable();
+            }
         }
-
         
         // Populate year selector
         allYears.forEach(year => {
@@ -783,49 +782,45 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             displayWeekMatchups();
             displayStandings();
             updateTableSelector();
-
         }
 
-        const tableSelector = document.getElementById('tableSelector');
-const dataTablesContainer = document.getElementById('dataTablesContainer');
+        function updateTableSelector() {
+            if (!tableSelector) return;
 
-function updateTableSelector() {
-    if (!tableSelector) return;
+            tableSelector.innerHTML = '';
+            const selectedYear = parseInt(yearSelector.value);
+            const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
+            const tableNames = Object.keys(yearData);
 
-    tableSelector.innerHTML = '';
-    const selectedYear = parseInt(yearSelector.value);
-    const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
-    const tableNames = Object.keys(yearData);
+            tableNames.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                tableSelector.appendChild(option);
+            });
 
-    tableNames.forEach(name => {
-        const option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        tableSelector.appendChild(option);
-    });
+            displayDataTable();
+        }
 
-    displayDataTable();
-}
+        function displayDataTable() {
+            if (!dataTablesContainer || !tableSelector) return;
 
-function displayDataTable() {
-    if (!dataTablesContainer || !tableSelector) return;
+            const selectedYear = parseInt(yearSelector.value);
+            const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
+            const tableName = tableSelector.value;
 
-    const selectedYear = parseInt(yearSelector.value);
-    const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
-    const tableName = tableSelector.value;
+            const tableObj = yearData[tableName] || {};
+            const rows = tableObj["_season"] || [];
 
-    const tableObj = yearData[tableName] || {};
-    const rows = tableObj["_season"] || [];
+            if (!rows || rows.length === 0) {
+                dataTablesContainer.innerHTML = '<p>No data available for this table.</p>';
+                return;
+            }
 
-    if (!rows || rows.length === 0) {
-        dataTablesContainer.innerHTML = '<p>No data available for this table.</p>';
-        return;
-    }
-
-    // Reuse your sortable table renderer
-    dataTablesContainer.innerHTML = createSortableTable(rows);
-    attachTableListeners();
-}
+            // Reuse your sortable table renderer
+            dataTablesContainer.innerHTML = createSortableTable(rows);
+            attachTableListeners();
+        }
 
         function displayWeekMatchups() {
             const selectedYear = parseInt(yearSelector.value);
@@ -972,14 +967,22 @@ function displayDataTable() {
         }
         
         // Event listeners
-        yearSelector.addEventListener('change', updateWeekSelector);
+        yearSelector.addEventListener('change', () => {
+            updateWeekSelector();
+            displayStats();
+            updateTableSelector();
+            displayDataTable();
+        });
+
         weekSelector.addEventListener('change', () => {
             displayWeekMatchups();
             displayStandings();
             displayStats();
             updateTableSelector();
-            displayDataTable();  
+            displayDataTable();
         });
+
+        tableSelector.addEventListener('change', displayDataTable);
         
         // Initialize displays
         updateWeekSelector();
@@ -988,6 +991,7 @@ function displayDataTable() {
 </body>
 </html>
 """
+
 
 
 def generate_html(
