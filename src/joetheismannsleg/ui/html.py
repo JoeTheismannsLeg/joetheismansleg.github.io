@@ -801,26 +801,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             displayDataTable();
         }
-
+        
         function displayDataTable() {
-            if (!dataTablesContainer || !tableSelector) return;
-
-            const selectedYear = parseInt(yearSelector.value);
-            const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
-            const tableName = tableSelector.value;
-
-            const tableObj = yearData[tableName] || {};
-            const rows = tableObj["_season"] || [];
-
-            if (!rows || rows.length === 0) {
-                dataTablesContainer.innerHTML = '<p>No data available for this table.</p>';
-                return;
-            }
-
-            // Reuse your sortable table renderer
-            dataTablesContainer.innerHTML = createSortableTable(rows);
-            attachTableListeners();
+          if (!dataTablesContainer || !tableSelector) return;
+        
+          const selectedYear = parseInt(yearSelector.value);
+          const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
+          const tableName = tableSelector.value;
+        
+          const tableObj = yearData[tableName] || {};
+        
+          const selectedWeek = parseInt(weekSelector.value);
+          const weekStr = String(selectedWeek);
+        
+          const rows = tableObj[weekStr] || tableObj["_season"] || [];
+        
+          if (!rows || rows.length === 0) {
+            dataTablesContainer.innerHTML = '<p>No data available for this table.</p>';
+            return;
+          }
+        
+          dataTablesContainer.innerHTML = createSortableTable(rows);
+          attachTableListeners();
         }
+
 
         function displayWeekMatchups() {
             const selectedYear = parseInt(yearSelector.value);
