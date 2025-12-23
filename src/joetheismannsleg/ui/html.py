@@ -673,6 +673,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <button class="tab-button active" onclick="switchTab('matchups')">Matchups</button>
             <button class="tab-button" onclick="switchTab('standings')">Standings</button>
             <button class="tab-button" onclick="switchTab('stats')">Behind the Cue Ball</button>
+            <button class="tab-button" onclick="switchTab('dataTables', event)">Data Tables</button>
+
         </div>
         
         <div id="matchups" class="tab-content active">
@@ -696,6 +698,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <div id="statsContainer"></div>
             </div>
         </div>
+
+        <div id="dataTables" class="tab-content">
+            <div class="controls" style="justify-content: flex-start;">
+            <label for="tableSelector">Select Table:</label>
+            <select id="tableSelector"></select>
+            </div>
+            <div class="scroll-wrapper">
+                <div id="dataTablesContainer"></div>
+            </div>
+        </div>
+
         
         <div class="footer">
             <div>Last Updated: {{ timestamp }}</div>
@@ -715,6 +728,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const allYears = {{ all_years_json }};
         const activeWeek = {{ active_week }};
         const activeSeason = {{ active_season }};
+        const additionalTables = {{ additional_tables_json }};
+
         
         const yearSelector = document.getElementById('yearSelector');
         const weekSelector = document.getElementById('weekSelector');
@@ -725,12 +740,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         let currentSortColumn = null;
         let currentSortDirection = 'asc';
         
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-            document.getElementById(tabName).classList.add('active');
-            event.target.classList.add('active');
+         function switchTab(tabName, evt) {
+          document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+          document.getElementById(tabName).classList.add('active');
+          (evt?.target || event.target).classList.add('active');
+        
+          // NEW: ensure Data Tables renders when you open it
+          if (tabName === 'dataTables') {
+            updateTableSelector();
+            displayDataTable();
+          }
         }
+
         
         // Populate year selector
         allYears.forEach(year => {
@@ -760,8 +782,51 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             
             displayWeekMatchups();
             displayStandings();
+            updateTableSelector();
+
         }
-        
+
+        const tableSelector = document.getElementById('tableSelector');
+const dataTablesContainer = document.getElementById('dataTablesContainer');
+
+function updateTableSelector() {
+    if (!tableSelector) return;
+
+    tableSelector.innerHTML = '';
+    const selectedYear = parseInt(yearSelector.value);
+    const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
+    const tableNames = Object.keys(yearData);
+
+    tableNames.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        tableSelector.appendChild(option);
+    });
+
+    displayDataTable();
+}
+
+function displayDataTable() {
+    if (!dataTablesContainer || !tableSelector) return;
+
+    const selectedYear = parseInt(yearSelector.value);
+    const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
+    const tableName = tableSelector.value;
+
+    const tableObj = yearData[tableName] || {};
+    const rows = tableObj["_season"] || [];
+
+    if (!rows || rows.length === 0) {
+        dataTablesContainer.innerHTML = '<p>No data available for this table.</p>';
+        return;
+    }
+
+    // Reuse your sortable table renderer
+    dataTablesContainer.innerHTML = createSortableTable(rows);
+    attachTableListeners();
+}
+
         function displayWeekMatchups() {
             const selectedYear = parseInt(yearSelector.value);
             const selectedYearStr = String(selectedYear);
@@ -912,6 +977,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             displayWeekMatchups();
             displayStandings();
             displayStats();
+            updateTableSelector();
+            displayDataTable();  
         });
         
         // Initialize displays
@@ -935,6 +1002,8 @@ def generate_html(
     git_branch: Optional[str] = None,
     git_commit: Optional[str] = None,
     git_commit_full: Optional[str] = None,
+    additional_tables: Optional[Dict] = None,
+    **kwargs,
 ) -> str:
     """
     Generate HTML page using modern approach.
@@ -961,6 +1030,9 @@ def generate_html(
     # Ensure season is an integer
     if isinstance(season, str):
         season = int(season)
+    
+    if additional_tables is None:
+        additional_tables = {}
 
     # Organize luck stats by year and week
     stats_table_data: Dict[int, Dict[int, List[Dict]]] = {}
@@ -1151,6 +1223,8 @@ def generate_html(
         "all_years_json": json.dumps(all_years),
         "active_week": active_week,
         "active_season": season,
+        "additional_tables_json": json.dumps(additional_tables),
+
     }
 
     # Render template
