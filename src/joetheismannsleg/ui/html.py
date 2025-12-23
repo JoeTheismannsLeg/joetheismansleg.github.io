@@ -16,95 +16,72 @@ logger = logging.getLogger(__name__)
 def add_data_labels_to_table(table_html: str) -> str:
     """
     Add data-label attributes to table cells for mobile responsiveness.
-    
+
     This allows the CSS ::before pseudo-element to display column headers
     on mobile devices using the data-label attribute.
-    
+
     Args:
         table_html: HTML string containing a table element
-        
+
     Returns:
         Modified HTML string with data-label attributes added to td elements
     """
-    # Extract column headers from the table
-    header_match = re.search(r'<thead>.*?<tr[^>]*>(.*?)</tr>.*?</thead>', table_html, re.DOTALL)
+    header_match = re.search(
+        r"<thead>.*?<tr[^>]*>(.*?)</tr>.*?</thead>", table_html, re.DOTALL
+    )
     if not header_match:
         return table_html
-    
+
     headers_html = header_match.group(1)
-    # Extract all header text from th elements
-    headers = re.findall(r'<th[^>]*>([^<]*)</th>', headers_html)
-    
+    headers = re.findall(r"<th[^>]*>([^<]*)</th>", headers_html)
+
     if not headers:
         return table_html
-    
-    # Find the tbody and process rows
-    tbody_match = re.search(r'<tbody>(.*?)</tbody>', table_html, re.DOTALL)
+
+    tbody_match = re.search(r"<tbody>(.*?)</tbody>", table_html, re.DOTALL)
     if not tbody_match:
         return table_html
-    
+
     tbody_html = tbody_match.group(1)
-    
-    # Process each row in tbody
-    rows = re.findall(r'<tr[^>]*>(.*?)</tr>', tbody_html, re.DOTALL)
+    rows = re.findall(r"<tr[^>]*>(.*?)</tr>", tbody_html, re.DOTALL)
     modified_tbody = tbody_html
-    
+
     for row_content in rows:
-        # Find all cells in this row
-        cells = re.findall(r'<td[^>]*>.*?</td>', row_content, re.DOTALL)
-        
+        cells = re.findall(r"<td[^>]*>.*?</td>", row_content, re.DOTALL)
         if not cells:
             continue
-        
-        # Add data-labels to each cell
+
         modified_row = row_content
         for cell_idx, cell in enumerate(cells):
-            if cell_idx < len(headers) and 'data-label=' not in cell:
+            if cell_idx < len(headers) and "data-label=" not in cell:
                 label = headers[cell_idx].strip()
                 new_cell = re.sub(
-                    r'<td([^>]*)>',
+                    r"<td([^>]*)>",
                     lambda m: f'<td{m.group(1)} data-label="{label}">',
                     cell,
-                    count=1
+                    count=1,
                 )
                 modified_row = modified_row.replace(cell, new_cell, 1)
-        
-        # Replace the row in tbody
+
         modified_tbody = modified_tbody.replace(row_content, modified_row, 1)
-    
-    # Replace tbody in the original HTML
-    result = table_html.replace(tbody_match.group(0), f'<tbody>{modified_tbody}</tbody>', 1)
-    
+
+    result = table_html.replace(
+        tbody_match.group(0), f"<tbody>{modified_tbody}</tbody>", 1
+    )
     return result
 
 
 def generate_matchup_cards(matchups: List[Matchup], week: int) -> str:
     """
     Generate mobile-friendly matchup cards for a list of matchups.
-    
-    Each card displays:
-    - Header: Week number or matchup name
-    - Two columns: Team 1 / Team 2
-    - Two columns: Score 1 / Score 2
-    
-    Args:
-        matchups: List of Matchup objects
-        week: Week number for header
-        
-    Returns:
-        HTML string containing matchup cards
     """
     if not matchups:
         return ""
-    
+
     cards_html = ""
-    
     for matchup in matchups:
-        # Determine header: use matchup name if available (postseason), otherwise use week
         header = matchup.name if matchup.name else f"Week {week}"
-        
-        # Build card HTML
-        card_html = f'''<div class="matchup-card">
+        card_html = f"""<div class="matchup-card">
     <div class="matchup-card-header">{header}</div>
     <div class="matchup-card-body">
         <div class="matchup-card-row">
@@ -120,10 +97,11 @@ def generate_matchup_cards(matchups: List[Matchup], week: int) -> str:
             <div class="matchup-card-score">{matchup.score_2:.2f}</div>
         </div>
     </div>
-</div>'''
+</div>"""
         cards_html += card_html
-    
+
     return cards_html
+
 
 # CSS styling (extracted to constant for easier maintenance)
 STYLESHEET = """
@@ -501,71 +479,22 @@ tbody tr:nth-child(odd) {
         font-size: 0.95em;
     }
 
+    /* Keep tables available on mobile (do NOT hide all tables).
+       We only hide matchup tables because matchup-cards replace them. */
     table {
-        margin: 15px 0;
         font-size: 0.85em;
     }
 
-    thead {
+    /* Matchups: hide the table and show cards */
+    table.matchup-table {
         display: none;
     }
-
-    tr {
-        display: block;
-        margin-bottom: 15px;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        overflow: hidden;
-        background: white;
-    }
-
-    tbody tr:nth-child(odd) {
-        background-color: white;
-    }
-
-    tbody tr:hover {
-        transform: none;
-        background-color: #f5f5f5;
-    }
-
-    td {
-        display: block;
-        padding: 10px 12px;
-        border-bottom: 1px solid #e0e0e0;
-        border-left: 3px solid #013369;
-        text-align: right;
-    }
-
-    td:last-child {
-        border-bottom: none;
-    }
-
-    td:before {
-        content: attr(data-label);
-        float: left;
-        font-weight: 700;
-        color: #013369;
-        text-transform: uppercase;
-        font-size: 0.75em;
-        letter-spacing: 0.5px;
-    }
-
-    /* Show matchup cards on mobile */
     .matchup-card {
         display: block;
     }
 
-    /* Hide tables on mobile when cards are shown */
-    table {
-        display: none;
-    }
-
-    .team-name {
-        display: inline;
-    }
-
-    .bye-week {
-        font-size: 0.9em;
+    td {
+        padding: 10px 12px;
     }
 
     .info-tabs {
@@ -610,10 +539,6 @@ tbody tr:nth-child(odd) {
     h3 {
         font-size: 1em;
         margin-top: 15px;
-    }
-
-    .controls {
-        gap: 8px;
     }
 
     label {
@@ -661,29 +586,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="container">
         <h1>{{ league_name }}</h1>
         <div class="season-year">{{ season }} Season</div>
-        
+
         <div class="controls">
             <label for="yearSelector">Select Year:</label>
             <select id="yearSelector"></select>
             <label for="weekSelector">Select Week:</label>
             <select id="weekSelector"></select>
         </div>
-        
+
         <div class="info-tabs">
-            <button class="tab-button active" onclick="switchTab('matchups')">Matchups</button>
-            <button class="tab-button" onclick="switchTab('standings')">Standings</button>
-            <button class="tab-button" onclick="switchTab('stats')">Behind the Cue Ball</button>
+            <button class="tab-button active" onclick="switchTab('matchups', event)">Matchups</button>
+            <button class="tab-button" onclick="switchTab('standings', event)">Standings</button>
+            <button class="tab-button" onclick="switchTab('stats', event)">Behind the Cue Ball</button>
             <button class="tab-button" onclick="switchTab('dataTables', event)">Data Tables</button>
         </div>
-        
+
         <div id="matchups" class="tab-content active">
             <div id="matchupContainer"></div>
         </div>
-        
+
         <div id="standings" class="tab-content">
             <div id="standingsContainer"></div>
         </div>
-        
+
         <div id="stats" class="tab-content">
             <div class="stats-info">
                 <h3>Behind the Cue Ball - Luck Statistics</h3>
@@ -718,7 +643,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             {% endif %}
         </div>
     </div>
-    
+
     <script>
         const weeklyTables = {{ weekly_tables_json }};
         const standingsByYear = {{ standings_by_year_json }};
@@ -736,27 +661,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         const tableSelector = document.getElementById('tableSelector');
         const dataTablesContainer = document.getElementById('dataTablesContainer');
-        
+
         let currentSortColumn = null;
         let currentSortDirection = 'asc';
+
         let dataTablesSortColumn = null;
         let dataTablesSortDirection = 'asc';
         let dataTablesCurrentRows = [];
 
-        
         function switchTab(tabName, evt) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
             (evt?.target || event.target).classList.add('active');
-        
-            // ensure Data Tables renders when you open it
+
             if (tabName === 'dataTables') {
                 updateTableSelector();
                 displayDataTable();
             }
         }
-        
+
         // Populate year selector
         allYears.forEach(year => {
             const option = document.createElement('option');
@@ -765,16 +689,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (year === activeSeason) option.selected = true;
             yearSelector.appendChild(option);
         });
-        
-        // Populate week selector
+
         function updateWeekSelector() {
             weekSelector.innerHTML = '';
-            const selectedYear = parseInt(yearSelector.value);
+            const selectedYear = parseInt(yearSelector.value, 10);
             const selectedYearStr = String(selectedYear);
+
             const weeksForYear = Object.keys(weeklyTables[selectedYearStr] || {})
-                .map(w => parseInt(w))
+                .map(w => parseInt(w, 10))
                 .sort((a, b) => a - b);
-            
+
             weeksForYear.forEach(week => {
                 const option = document.createElement('option');
                 option.value = week;
@@ -782,303 +706,270 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (week === activeWeek && selectedYear === activeSeason) option.selected = true;
                 weekSelector.appendChild(option);
             });
-            
+
             displayWeekMatchups();
             displayStandings();
+            displayStats();
             updateTableSelector();
+            displayDataTable();
         }
-
-        function updateTableSelector() {
-          if (!tableSelector) return;
-        
-          tableSelector.innerHTML = '';
-          const selectedYear = parseInt(yearSelector.value, 10);
-          const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
-        
-          const allowed = new Set([
-            "Head-to-Head Matrix",
-            "Top Scoring Placements",
-            "Average Opponent Scoring Rank",
-          ]);
-        
-          const tableNames = Object.keys(yearData).filter(name => allowed.has(name));
-        
-          tableNames.forEach(name => {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = name;
-            tableSelector.appendChild(option);
-          });
-        
-          displayDataTable();
-        }
-
-        
-        function displayDataTable() {
-          if (!dataTablesContainer || !tableSelector) return;
-        
-          const selectedYear = parseInt(yearSelector.value);
-          const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
-          const tableName = tableSelector.value;
-        
-          const tableObj = yearData[tableName] || {};
-        
-          const selectedWeek = parseInt(weekSelector.value);
-          const weekStr = String(selectedWeek);
-        
-          const rows = tableObj[weekStr] || tableObj["_season"] || [];
-
-          // reset per render so sorting isn't "sticky" across week/year/table changes
-          dataTablesSortColumn = null;
-          dataTablesSortDirection = 'asc';
-        
-          if (!rows || rows.length === 0) {
-            dataTablesContainer.innerHTML = '<p>No data available for this table.</p>';
-            return;
-          }
-        
-          dataTablesCurrentRows = rows.slice(); // store a copy we can sort
-          dataTablesContainer.innerHTML = createSortableTable(rows, true); // true => sortable
-          attachDataTablesListeners();
-        }
-
 
         function displayWeekMatchups() {
-            const selectedYear = parseInt(yearSelector.value);
+            const selectedYear = parseInt(yearSelector.value, 10);
             const selectedYearStr = String(selectedYear);
-            const selectedWeek = parseInt(weekSelector.value);
+            const selectedWeek = parseInt(weekSelector.value, 10);
             const weekStr = String(selectedWeek);
             const yearTables = weeklyTables[selectedYearStr] || {};
             matchupContainer.innerHTML = yearTables[weekStr] || '<p>No matchups found.</p>';
         }
-        
+
         function displayStandings() {
-            const selectedYear = parseInt(yearSelector.value);
+            const selectedYear = parseInt(yearSelector.value, 10);
             const selectedYearStr = String(selectedYear);
             standingsContainer.innerHTML = standingsByYear[selectedYearStr] || '<p>No standings data available.</p>';
         }
-        
+
         function displayStats() {
-            const selectedYear = parseInt(yearSelector.value);
+            const selectedYear = parseInt(yearSelector.value, 10);
             const selectedYearStr = String(selectedYear);
-            const selectedWeek = parseInt(weekSelector.value);
+            const selectedWeek = parseInt(weekSelector.value, 10);
             const weekStr = String(selectedWeek);
-            
+
             const yearData = statsTableData[selectedYearStr] || {};
             const weekData = yearData[weekStr] || [];
-            
+
             if (weekData.length === 0) {
                 statsContainer.innerHTML = '<p>No stats data available for this week.</p>';
                 return;
             }
-            
-            // Create sortable table from raw data
-            const table = createSortableTable(weekData, true);
-            statsContainer.innerHTML = table;
-            attachTableListeners();
-        }
-        
-        function createSortableTable(data, makeSortable = false) {
-          if (data.length === 0) return '<p>No data available.</p>';
-        
-          const columns = Object.keys(data[0]);
-          let html = '<table class="stats-table"><thead><tr>';
-        
-          columns.forEach(col => {
-            if (makeSortable) {
-              html += `<th class="sortable" data-column="${col}">${col} <span class="sort-indicator"></span></th>`;
-            } else {
-              html += `<th>${col}</th>`;
-            }
-          });
-        
-          html += '</tr></thead><tbody>';
-        
-          data.forEach(row => {
-            html += '<tr>';
-            columns.forEach(col => {
-              let cellContent = row[col];
-              let cellClass = 'cell';
-        
-              // Luck styling (used in Stats tab)
-              if (col === 'Luck') {
-                const val = parseFloat(cellContent);
-                if (val > 0.01) cellClass += ' luck-positive';
-                else if (val < -0.01) cellClass += ' luck-negative';
-                else cellClass += ' luck-neutral';
-              }
-        
-              // Trend styling (used in Stats tab)
-              if (col === 'Trend') {
-                if (cellContent === '↑') cellClass += ' trend-up';
-                else if (cellContent === '↓') cellClass += ' trend-down';
-                else if (cellContent === '→') cellClass += ' trend-stable';
-              }
-        
-              html += `<td class="${cellClass}">${cellContent ?? ''}</td>`;
-            });
-            html += '</tr>';
-          });
-        
-          html += '</tbody></table>';
-          return html;
+
+            statsContainer.innerHTML = createSortableTable(weekData, true, 'stats');
+            attachTableListeners('#statsContainer', sortTable);
         }
 
-        
-        // Stats table sorting (scoped to Stats container so it doesn't hijack Data Tables)
-        function attachTableListeners() {
-            document.querySelectorAll('#statsContainer th.sortable').forEach(th => {
-                th.addEventListener('click', () => sortTable(th));
+        // Data Tables: only show these three options
+        function updateTableSelector() {
+            if (!tableSelector) return;
+
+            tableSelector.innerHTML = '';
+
+            const selectedYear = parseInt(yearSelector.value, 10);
+            const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
+
+            const allowed = new Set([
+                "Head-to-Head Matrix",
+                "Top Scoring Placements",
+                "Average Opponent Scoring Rank"
+            ]);
+
+            const tableNames = Object.keys(yearData).filter(name => allowed.has(name));
+
+            tableNames.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                tableSelector.appendChild(option);
             });
         }
-        
+
+        function displayDataTable() {
+            if (!dataTablesContainer || !tableSelector) return;
+
+            const selectedYear = parseInt(yearSelector.value, 10);
+            const yearData = additionalTables[String(selectedYear)] || additionalTables[selectedYear] || {};
+            const tableName = tableSelector.value;
+
+            const tableObj = yearData[tableName] || {};
+
+            const selectedWeek = parseInt(weekSelector.value, 10);
+            const weekStr = String(selectedWeek);
+
+            const rows = tableObj[weekStr] || tableObj["_season"] || [];
+
+            if (!rows || rows.length === 0) {
+                dataTablesContainer.innerHTML = '<p>No data available for this table.</p>';
+                return;
+            }
+
+            dataTablesCurrentRows = rows.slice();
+            dataTablesContainer.innerHTML = createSortableTable(dataTablesCurrentRows, true, 'dataTables');
+            attachTableListeners('#dataTablesContainer', sortDataTables);
+        }
+
+        // Generic sortable table renderer (used by both Stats + Data Tables)
+        function createSortableTable(data, makeSortable = false, scope = '') {
+            if (!data || data.length === 0) return '<p>No data available.</p>';
+
+            const columns = Object.keys(data[0]);
+            let html = '<table class="stats-table"><thead><tr>';
+
+            columns.forEach(col => {
+                if (makeSortable) {
+                    html += `<th class="sortable" data-scope="${scope}" data-column="${col}">${col} <span class="sort-indicator"></span></th>`;
+                } else {
+                    html += `<th>${col}</th>`;
+                }
+            });
+
+            html += '</tr></thead><tbody>';
+
+            data.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    let cellContent = row[col];
+                    let cellClass = 'cell';
+
+                    if (col === 'Luck') {
+                        const val = parseFloat(cellContent);
+                        if (val > 0.01) cellClass += ' luck-positive';
+                        else if (val < -0.01) cellClass += ' luck-negative';
+                        else cellClass += ' luck-neutral';
+                    }
+
+                    if (col === 'Trend') {
+                        if (cellContent === '↑') cellClass += ' trend-up';
+                        else if (cellContent === '↓') cellClass += ' trend-down';
+                        else if (cellContent === '→') cellClass += ' trend-stable';
+                    }
+
+                    html += `<td class="${cellClass}">${cellContent ?? ''}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        function attachTableListeners(containerSelector, handlerFn) {
+            document.querySelectorAll(`${containerSelector} th.sortable`).forEach(th => {
+                th.addEventListener('click', () => handlerFn(th));
+            });
+        }
+
+        // Stats sorting
         function sortTable(th) {
             const column = th.dataset.column;
-            const selectedYear = parseInt(yearSelector.value);
-            const selectedWeek = parseInt(weekSelector.value);
-            
-            // Toggle sort direction
+            const selectedYear = parseInt(yearSelector.value, 10);
+            const selectedYearStr = String(selectedYear);
+            const selectedWeek = parseInt(weekSelector.value, 10);
+            const weekStr = String(selectedWeek);
+
             if (currentSortColumn === column) {
                 currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
             } else {
                 currentSortColumn = column;
                 currentSortDirection = 'asc';
             }
-            
-            const yearData = statsTableData[selectedYear] || {};
-            const weekData = (yearData[selectedWeek] || []).slice();
-            
-            // Sort data
+
+            const yearData = statsTableData[selectedYearStr] || {};
+            const weekData = (yearData[weekStr] || []).slice();
+
             weekData.sort((a, b) => {
                 let aVal = a[column];
                 let bVal = b[column];
-                
-                // Handle percentage strings (e.g., "88.9%")
+
                 if (String(aVal).includes('%') && String(bVal).includes('%')) {
                     const aNum = parseFloat(String(aVal).replace('%', ''));
                     const bNum = parseFloat(String(bVal).replace('%', ''));
                     return currentSortDirection === 'asc' ? aNum - bNum : bNum - aNum;
                 }
-                
-                // Try to parse as number
+
                 const aNum = parseFloat(aVal);
                 const bNum = parseFloat(bVal);
-                
+
                 if (!isNaN(aNum) && !isNaN(bNum)) {
                     return currentSortDirection === 'asc' ? aNum - bNum : bNum - aNum;
                 }
-                
-                // String comparison
-                if (currentSortDirection === 'asc') {
-                    return String(aVal).localeCompare(String(bVal));
-                } else {
-                    return String(bVal).localeCompare(String(aVal));
-                }
+
+                return currentSortDirection === 'asc'
+                    ? String(aVal ?? '').localeCompare(String(bVal ?? ''))
+                    : String(bVal ?? '').localeCompare(String(aVal ?? ''));
             });
-            
-            // Update display
-            const table = createSortableTable(weekData, true);
-            statsContainer.innerHTML = table;
-            
-            // Update sort indicators
+
+            statsContainer.innerHTML = createSortableTable(weekData, true, 'stats');
+
             document.querySelectorAll('#statsContainer th.sortable').forEach(header => {
                 const indicator = header.querySelector('.sort-indicator');
                 if (!indicator) return;
-                if (header.dataset.column === column) {
-                    indicator.textContent = currentSortDirection === 'asc' ? '▲' : '▼';
-                } else {
-                    indicator.textContent = '';
-                }
+                indicator.textContent =
+                    header.dataset.column === column
+                        ? (currentSortDirection === 'asc' ? '▲' : '▼')
+                        : '';
             });
-            
-            attachTableListeners();
+
+            attachTableListeners('#statsContainer', sortTable);
         }
 
-        // Data Tables sorting (isolated)
-        function attachDataTablesListeners() {
-          document.querySelectorAll('#dataTablesContainer th.sortable').forEach(th => {
-            th.addEventListener('click', () => sortDataTables(th));
-          });
-        }
-        
+        // Data Tables sorting
         function sortDataTables(th) {
-          const column = th.dataset.column;
-        
-          // toggle direction
-          if (dataTablesSortColumn === column) {
-            dataTablesSortDirection = dataTablesSortDirection === 'asc' ? 'desc' : 'asc';
-          } else {
-            dataTablesSortColumn = column;
-            dataTablesSortDirection = 'asc';
-          }
-        
-          const sorted = dataTablesCurrentRows.slice();
-        
-          sorted.sort((a, b) => {
-            let aVal = a[column];
-            let bVal = b[column];
-        
-            // Prefer numeric sort when possible
-            const aNum = parseFloat(aVal);
-            const bNum = parseFloat(bVal);
-        
-            if (!isNaN(aNum) && !isNaN(bNum)) {
-              return dataTablesSortDirection === 'asc' ? aNum - bNum : bNum - aNum;
-            }
-        
-            // Otherwise sort as strings
-            const aStr = (aVal ?? '').toString();
-            const bStr = (bVal ?? '').toString();
-            return dataTablesSortDirection === 'asc'
-              ? aStr.localeCompare(bStr)
-              : bStr.localeCompare(aStr);
-          });
-        
-          // re-render
-          dataTablesCurrentRows = sorted;
-          dataTablesContainer.innerHTML = createSortableTable(sorted, true);
-        
-          // update indicator arrows
-          document.querySelectorAll('#dataTablesContainer th.sortable').forEach(header => {
-            const indicator = header.querySelector('.sort-indicator');
-            if (!indicator) return;
-            if (header.dataset.column === column) {
-              indicator.textContent = dataTablesSortDirection === 'asc' ? '▲' : '▼';
+            const column = th.dataset.column;
+
+            if (dataTablesSortColumn === column) {
+                dataTablesSortDirection = dataTablesSortDirection === 'asc' ? 'desc' : 'asc';
             } else {
-              indicator.textContent = '';
+                dataTablesSortColumn = column;
+                dataTablesSortDirection = 'asc';
             }
-          });
-        
-          attachDataTablesListeners();
+
+            const sorted = dataTablesCurrentRows.slice();
+            sorted.sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+
+                const aNum = parseFloat(aVal);
+                const bNum = parseFloat(bVal);
+
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    return dataTablesSortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+                }
+
+                const aStr = (aVal ?? '').toString();
+                const bStr = (bVal ?? '').toString();
+                return dataTablesSortDirection === 'asc'
+                    ? aStr.localeCompare(bStr)
+                    : bStr.localeCompare(aStr);
+            });
+
+            dataTablesCurrentRows = sorted;
+            dataTablesContainer.innerHTML = createSortableTable(sorted, true, 'dataTables');
+
+            document.querySelectorAll('#dataTablesContainer th.sortable').forEach(header => {
+                const indicator = header.querySelector('.sort-indicator');
+                if (!indicator) return;
+                indicator.textContent =
+                    header.dataset.column === column
+                        ? (dataTablesSortDirection === 'asc' ? '▲' : '▼')
+                        : '';
+            });
+
+            attachTableListeners('#dataTablesContainer', sortDataTables);
         }
 
         // Event listeners
         yearSelector.addEventListener('change', () => {
             updateWeekSelector();
-            displayStats();
-            updateTableSelector();
-            displayDataTable();
         });
 
         weekSelector.addEventListener('change', () => {
             displayWeekMatchups();
             displayStandings();
             displayStats();
-            updateTableSelector();
             displayDataTable();
         });
 
-        tableSelector.addEventListener('change', displayDataTable);
-        
-        // Initialize displays
+        if (tableSelector) {
+            tableSelector.addEventListener('change', () => {
+                displayDataTable();
+            });
+        }
+
+        // Initialize
         updateWeekSelector();
-        displayStats();
     </script>
 </body>
 </html>
 """
-
-
 
 
 def generate_html(
@@ -1098,59 +989,35 @@ def generate_html(
 ) -> str:
     """
     Generate HTML page using modern approach.
-
-    Args:
-        matchups: List of Matchup objects (current season)
-        standings: List of TeamRecord objects (current season)
-        league_name: League name
-        season: Season year (current season)
-        luck_stats: Optional list of luck stat dictionaries for current season
-        historical_matchups: Optional dict mapping year -> list of matchups for that year
-        historical_standings: Optional dict mapping year -> list of standings for that year
-        historical_luck_stats: Optional dict mapping year -> list of luck stats for that year
-        git_branch: Optional current git branch name
-        git_commit: Optional short git commit hash (for display)
-        git_commit_full: Optional full git commit hash (for GitHub links)
-
-    Returns:
-        HTML page as string
     """
     if season is None:
         season = datetime.now().year
 
-    # Ensure season is an integer
     if isinstance(season, str):
         season = int(season)
-    
+
     if additional_tables is None:
         additional_tables = {}
 
     # Organize luck stats by year and week
     stats_table_data: Dict[int, Dict[int, List[Dict]]] = {}
 
-    # Current season stats
     if luck_stats:
         stats_by_week: Dict[int, List[Dict]] = {}
         for stat in luck_stats:
             week = stat.get("Week", 1)
-            if week not in stats_by_week:
-                stats_by_week[week] = []
-            stats_by_week[week].append(stat)
+            stats_by_week.setdefault(week, []).append(stat)
         stats_table_data[season] = stats_by_week
 
-    # Historical stats
     if historical_luck_stats:
         for year, year_stats in historical_luck_stats.items():
             year_int = int(year) if isinstance(year, str) else year
             stats_by_week = {}
             for stat in year_stats:
                 week = stat.get("Week", 1)
-                if week not in stats_by_week:
-                    stats_by_week[week] = []
-                stats_by_week[week].append(stat)
+                stats_by_week.setdefault(week, []).append(stat)
             stats_table_data[year_int] = stats_by_week
 
-    # Get all available years and ensure they're all integers
     all_years = sorted([int(year) for year in stats_table_data.keys()], reverse=True)
     if not all_years:
         all_years = [season]
@@ -1158,38 +1025,26 @@ def generate_html(
     # Organize matchups by year and week
     matchups_by_year_week: Dict[int, Dict[int, List[Matchup]]] = {}
 
-    # Current season matchups
     for m in matchups:
-        if season not in matchups_by_year_week:
-            matchups_by_year_week[season] = {}
-        if m.week not in matchups_by_year_week[season]:
-            matchups_by_year_week[season][m.week] = []
-        matchups_by_year_week[season][m.week].append(m)
+        matchups_by_year_week.setdefault(season, {}).setdefault(m.week, []).append(m)
 
-    # Historical matchups
     if historical_matchups:
         for year, year_matchups in historical_matchups.items():
             year_int = int(year) if isinstance(year, str) else year
-            if year_int not in matchups_by_year_week:
-                matchups_by_year_week[year_int] = {}
             for m in year_matchups:
-                if m.week not in matchups_by_year_week[year_int]:
-                    matchups_by_year_week[year_int][m.week] = []
-                matchups_by_year_week[year_int][m.week].append(m)
+                matchups_by_year_week.setdefault(year_int, {}).setdefault(m.week, []).append(m)
 
     # Generate HTML for each week of each year
-    weekly_tables: Dict[int, Dict[int, str]] = {}  # year -> week -> html
+    weekly_tables: Dict[int, Dict[int, str]] = {}
     for year in all_years:
         weekly_tables[year] = {}
         year_matchups = matchups_by_year_week.get(year, {})
         for week in sorted(year_matchups.keys()):
             week_matchups = year_matchups[week]
-            
-            # Separate regular and postseason matchups
+
             regular_matchups = [m for m in week_matchups if not m.is_postseason()]
             postseason_matchups = [m for m in week_matchups if m.is_postseason()]
-            
-            # Generate regular matchups table
+
             html_parts = []
             if regular_matchups:
                 df = pd.DataFrame(
@@ -1205,20 +1060,15 @@ def generate_html(
                 )
 
                 if not df.empty:
-                    # Add Sleeper matchups title
                     html = "<h3 style='color: #013369; margin-bottom: 15px;'>Sleeper Matchups</h3>"
                     table_html = df.to_html(index=False, classes="matchup-table")
                     table_html = table_html.replace("<td>", '<td class="cell">')
                     table_html = table_html.replace("<th>", '<th class="header-cell">')
                     table_html = add_data_labels_to_table(table_html)
                     html += table_html
-                    
-                    # Add matchup cards for mobile
                     html += generate_matchup_cards(regular_matchups, week)
-                    
                     html_parts.append(html)
-            
-            # Generate postseason matchups table if present
+
             if postseason_matchups:
                 df = pd.DataFrame(
                     [
@@ -1234,27 +1084,21 @@ def generate_html(
                 )
 
                 if not df.empty:
-                    # Add JTL postseason title
                     html = "<h3 style='color: #d50a0a; margin-top: 30px; margin-bottom: 15px;'>JTL Matchups</h3>"
                     table_html = df.to_html(index=False, classes="matchup-table")
                     table_html = table_html.replace("<td>", '<td class="cell">')
                     table_html = table_html.replace("<th>", '<th class="header-cell">')
                     table_html = add_data_labels_to_table(table_html)
                     html += table_html
-                    
-                    # Add matchup cards for mobile
                     html += generate_matchup_cards(postseason_matchups, week)
-                    
                     html_parts.append(html)
-            
-            # Combine all HTML for this week
+
             if html_parts:
                 weekly_tables[year][week] = "".join(html_parts)
 
-    # Organize standings by year
+    # Standings by year
     standings_by_year: Dict[int, str] = {}
 
-    # Current season standings
     standings_df = pd.DataFrame([s.to_dict() for s in standings])
     if not standings_df.empty:
         html = standings_df.to_html(index=False, classes="standings-table")
@@ -1263,7 +1107,6 @@ def generate_html(
         html = add_data_labels_to_table(html)
         standings_by_year[season] = html
 
-    # Historical standings
     if historical_standings:
         for year, year_standings in historical_standings.items():
             year_int = int(year) if isinstance(year, str) else year
@@ -1275,28 +1118,23 @@ def generate_html(
                 html = add_data_labels_to_table(html)
                 standings_by_year[year_int] = html
 
-    # Generate luck stats data (keep as JSON for JavaScript processing)
-    stats_html = ""  # No longer pre-rendered, JS handles it
-
     # Determine active week from current season matchups
     matchups_by_week: Dict[int, List[Matchup]] = {}
     for m in matchups:
-        if m.week not in matchups_by_week:
-            matchups_by_week[m.week] = []
-        matchups_by_week[m.week].append(m)
+        matchups_by_week.setdefault(m.week, []).append(m)
 
     active_week = 1
     for week in sorted(matchups_by_week.keys(), reverse=True):
         week_matches = matchups_by_week[week]
         if any(not m.is_incomplete() and not m.is_bye() for m in week_matches):
-            # Check if week has scores OR has custom JTL matchups (which should display even with zero scores)
-            has_scores = any(m.score_1 > 0 or m.score_2 > 0 for m in week_matches if not m.is_bye())
+            has_scores = any(
+                (m.score_1 > 0 or m.score_2 > 0) for m in week_matches if not m.is_bye()
+            )
             has_jtl_matchups = any(m.is_postseason() for m in week_matches)
             if has_scores or has_jtl_matchups:
                 active_week = week
                 break
 
-    # Prepare template context
     import json
 
     template_context = {
@@ -1309,15 +1147,12 @@ def generate_html(
         "git_commit_full": git_commit_full,
         "weekly_tables_json": json.dumps(weekly_tables),
         "standings_by_year_json": json.dumps(standings_by_year),
-        "stats_html": stats_html,
         "stats_table_data_json": json.dumps(stats_table_data),
         "all_years_json": json.dumps(all_years),
         "active_week": active_week,
         "active_season": season,
         "additional_tables_json": json.dumps(additional_tables),
-
     }
 
-    # Render template
     template = Template(HTML_TEMPLATE)
     return template.render(**template_context)
