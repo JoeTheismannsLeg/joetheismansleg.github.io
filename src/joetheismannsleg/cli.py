@@ -46,7 +46,6 @@ def get_git_info() -> Tuple[str, str, str]:
         return "local build", "n/a", "n/a"
 
 
-
 def load_postseason_matchups(
     season: int,
     client: Optional["LeagueClient"] = None,  # type: ignore
@@ -214,7 +213,9 @@ def main() -> int:
 
         # Load postseason matchups for current season
         logger.info("Loading postseason matchups...")
-        postseason_matchups = load_postseason_matchups(current_season, client=client, regular_matchups=matchups)
+        postseason_matchups = load_postseason_matchups(
+            current_season, client=client, regular_matchups=matchups
+        )
         logger.info(f"Loaded {len(postseason_matchups)} postseason matchups")
 
         # Merge postseason matchups with regular matchups
@@ -255,6 +256,129 @@ def main() -> int:
                 except Exception:
                     return {"value": str(obj)}
 
+        # ---------------------------------------------------------------------
+        # NEW (suggested change): week-keyed extra tables builder
+        # ---------------------------------------------------------------------
+        def compute_weekly_extra_tables(matchups_subset: List[Matchup]) -> Dict[str, List[Dict[str, object]]]:
+            # Collect teams from matchups
+            teams_set = set()
+            for m in matchups_subset:
+                if m.is_bye() or m.is_incomplete():
+                    continue
+                teams_set.add(m.team_1)
+                teams_set.add(m.team_2)
+            teams = sorted(teams_set)
+
+            # Build week -> team -> score mapping and week matchups list
+            week_team_scores: Dict[int, Dict[str, float]] = {}
+            week_matchups_local: Dict[int, List[Matchup]] = {}
+            for m in matchups_subset:
+                if m.is_bye() or m.is_incomplete():
+                    continue
+                wk = int(m.week)
+                week_team_scores.setdefault(wk, {})
+                week_matchups_local.setdefault(wk, [])
+                week_team_scores[wk][m.team_1] = m.score_1
+                week_team_scores[wk][m.team_2] = m.score_2
+                week_matchups_local[wk].append(m)
+
+            # Compute head-to-head win counts
+            wins_local: Dict[_Tuple[str, str], int] = {}
+            for m in matchups_subset:
+                if m.is_bye() or m.is_incomplete():
+                    continue
+                w = m.winner()
+                if w is None or w == 0:
+                    continue
+                winner = m.team_1 if w == 1 else m.team_2
+                loser = m.team_2 if w == 1 else m.team_1
+                wins_local[(winner, loser)] = wins_local.get((winner, loser), 0) + 1
+
+            # Head-to-head matrix
+            head_to_head_rows_local: List[Dict[str, object]] = []
+            for team in teams:
+                row: Dict[str, object] = {"Team": team}
+                for opp in teams:
+                    if team == opp:
+                        row[opp] = "-"
+                        continue
+                    w = wins_local.get((team, opp), 0)
+                    l = wins_local.get((opp, team), 0)
+                    row[opp] = f"{w}-{l}"
+                head_to_head_rows_local.append(row)
+
+            # Build ranking per week: team -> week -> rank (1 is highest scorer)
+            team_week_rank_local: Dict[str, Dict[int, int]] = {t: {} for t in teams}
+            for wk, scores in week_team_scores.items():
+                sorted_pairs = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+                distinct_rank = 1
+                last_score = None
+                score_to_rank: Dict[float, int] = {}
+                for t, sc in sorted_pairs:
+                    if sc != last_score:
+                        score_to_rank[sc] = distinct_rank
+                        last_score = sc
+                        distinct_rank += 1
+                    team_week_rank_local.setdefault(t, {})[wk] = score_to_rank[sc]
+
+            # Opponent mapping per team per week
+            opponent_by_team_week_local: Dict[str, Dict[int, str]] = {t: {} for t in teams}
+            for wk, mlist in week_matchups_local.items():
+                for m in mlist:
+                    opponent_by_team_week_local.setdefault(m.team_1, {})[wk] = m.team_2
+                    opponent_by_team_week_local.setdefault(m.team_2, {})[wk] = m.team_1
+
+            # Top scoring placement counts and average opponent rank
+            top_counts_rows_local: List[Dict[str, object]] = []
+            avg_opp_rows_local: List[Dict[str, object]] = []
+
+            for team in teams:
+                weeks_played = sorted(team_week_rank_local.get(team, {}).keys())
+                top3 = 0
+                top5 = 0
+                opp_top3 = 0
+                opp_top5 = 0
+                opp_ranks: List[int] = []
+
+                for wk in weeks_played:
+                    rank = team_week_rank_local.get(team, {}).get(wk)
+                    if rank is not None:
+                        if rank <= 3:
+                            top3 += 1
+                        if rank <= 5:
+                            top5 += 1
+
+                    opp = opponent_by_team_week_local.get(team, {}).get(wk)
+                    if opp:
+                        opp_rank = team_week_rank_local.get(opp, {}).get(wk)
+                        if opp_rank is not None:
+                            if opp_rank <= 3:
+                                opp_top3 += 1
+                            if opp_rank <= 5:
+                                opp_top5 += 1
+                            opp_ranks.append(opp_rank)
+
+                avg_rank = round(sum(opp_ranks) / len(opp_ranks), 2) if opp_ranks else None
+
+                top_counts_rows_local.append(
+                    {
+                        "Team": team,
+                        "Top 3 Count": top3,
+                        "Top 5 Count": top5,
+                        "Opponent Top 3 Count": opp_top3,
+                        "Opponent Top 5 Count": opp_top5,
+                    }
+                )
+                avg_opp_rows_local.append(
+                    {"Team": team, "Average Opponent Scoring Rank": avg_rank}
+                )
+
+            return {
+                "Head-to-Head Matrix": head_to_head_rows_local,
+                "Top Scoring Placements": top_counts_rows_local,
+                "Average Opponent Scoring Rank": avg_opp_rows_local,
+            }
+
         # Build additional_tables with real data for Data Tables tab
         additional_tables: Dict[int, Dict[str, Dict]] = {}
         season_tables: Dict[str, Dict] = {}
@@ -283,173 +407,68 @@ def main() -> int:
         except Exception:
             season_tables["Weekly Luck"] = {"_season": []}
 
-        # Prepare data structures for requested new tables:
-        # - Head-to-Head matrix (team x team with W-L)
-        # - Top scoring placements counts (team-level: times in top3, top5; opponent top3/top5)
-        # - Average weekly scoring rank of opponents (team-level)
-
-        # Gather teams from standings (preferred) or from matchups
+        # ---------------------------------------------------------------------
+        # NEW (suggested change): week-keyed versions for the three new tables
+        # (season-to-date through selected week)
+        # ---------------------------------------------------------------------
         try:
-            teams = [row.get("team") if isinstance(row, dict) else getattr(row, "team", None) for row in standings]
-            teams = [t for t in teams if t]
-            if not teams:
-                # Fall back to teams from matchups
-                teams_set = set()
-                for m in all_matchups:
-                    if not m.is_bye() and not m.is_incomplete():
-                        teams_set.add(m.team_1)
-                        teams_set.add(m.team_2)
-                teams = sorted(list(teams_set))
-        except Exception:
-            teams = []
-            teams_set = set()
-            for m in all_matchups:
-                if not m.is_bye() and not m.is_incomplete():
-                    teams_set.add(m.team_1)
-                    teams_set.add(m.team_2)
-            teams = sorted(list(teams_set))
-
-        # Build week -> team -> score mapping and week matchups list
-        week_team_scores: Dict[int, Dict[str, float]] = {}
-        week_matchups: Dict[int, List[Matchup]] = {}
-        for m in all_matchups:
-            if m.is_bye() or m.is_incomplete():
-                continue
-            wk = int(m.week)
-            week_team_scores.setdefault(wk, {})
-            week_matchups.setdefault(wk, [])
-            # if duplicate entries for the same team/week exist, later ones will overwrite
-            week_team_scores[wk][m.team_1] = m.score_1
-            week_team_scores[wk][m.team_2] = m.score_2
-            week_matchups[wk].append(m)
-
-        # Compute head-to-head win counts: wins[(winner, loser)] = count
-        wins: Dict[_Tuple[str, str], int] = {}
-        for m in all_matchups:
-            if m.is_bye() or m.is_incomplete():
-                continue
-            w = m.winner()
-            if w is None or w == 0:
-                continue
-            if w == 1:
-                winner = m.team_1
-                loser = m.team_2
-            else:
-                winner = m.team_2
-                loser = m.team_1
-            wins[(winner, loser)] = wins.get((winner, loser), 0) + 1
-
-        # Head-to-head matrix as list of rows: {'Team': T, 'Opp A': 'W-L', ...}
-        head_to_head_rows: List[Dict[str, object]] = []
-        for team in teams:
-            row = {"Team": team}
-            for opp in teams:
-                if team == opp:
-                    row[opp] = "-"
-                    continue
-                w = wins.get((team, opp), 0)
-                l = wins.get((opp, team), 0)
-                row[opp] = f"{w}-{l}"
-            head_to_head_rows.append(row)
-        season_tables["Head-to-Head Matrix"] = {"_season": head_to_head_rows}
-
-        # Build ranking per week: team -> week -> rank (1 is highest scorer)
-        team_week_rank: Dict[str, Dict[int, int]] = {t: {} for t in teams}
-        for wk, scores in week_team_scores.items():
-            # sort teams by score desc; produce rank mapping
-            sorted_pairs = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
-            # dense rank assignment: same score => same rank
-            distinct_rank = 1
-            last_score = None
-            score_to_rank = {}
-            for t, sc in sorted_pairs:
-                if sc != last_score:
-                    score_to_rank[sc] = distinct_rank
-                    last_score = sc
-                    distinct_rank += 1
-                team_week_rank.setdefault(t, {})[wk] = score_to_rank[sc]
-
-        # For each matchup, record opponent mapping per team per week
-        opponent_by_team_week: Dict[str, Dict[int, str]] = {t: {} for t in teams}
-        for wk, mlist in week_matchups.items():
-            for m in mlist:
-                # ensure both teams present
-                opponent_by_team_week.setdefault(m.team_1, {})[wk] = m.team_2
-                opponent_by_team_week.setdefault(m.team_2, {})[wk] = m.team_1
-
-        # Top scoring placement counts and opponent top placements
-        top_counts_rows: List[Dict[str, object]] = []
-        for team in teams:
-            # Collect weeks team has score
-            weeks_played = sorted(team_week_rank.get(team, {}).keys())
-            top3 = 0
-            top5 = 0
-            opp_top3 = 0
-            opp_top5 = 0
-            opp_ranks = []
-            for wk in weeks_played:
-                rank = team_week_rank.get(team, {}).get(wk)
-                if rank is not None:
-                    if rank <= 3:
-                        top3 += 1
-                    if rank <= 5:
-                        top5 += 1
-                # opponent checks
-                opp = opponent_by_team_week.get(team, {}).get(wk)
-                if opp:
-                    opp_rank = team_week_rank.get(opp, {}).get(wk)
-                    if opp_rank is not None:
-                        if opp_rank <= 3:
-                            opp_top3 += 1
-                        if opp_rank <= 5:
-                            opp_top5 += 1
-                        opp_ranks.append(opp_rank)
-            avg_opp_rank = round((sum(opp_ranks) / len(opp_ranks)), 2) if opp_ranks else None
-            top_counts_rows.append(
-                {
-                    "Team": team,
-                    "Top 3 Count": top3,
-                    "Top 5 Count": top5,
-                    "Opponent Top 3 Count": opp_top3,
-                    "Opponent Top 5 Count": opp_top5,
-                }
+            weeks_present = sorted(
+                {int(m.week) for m in all_matchups if not m.is_bye() and not m.is_incomplete()}
             )
-        season_tables["Top Scoring Placements"] = {"_season": top_counts_rows}
+            h2h_by_week: Dict[str, List[Dict[str, object]]] = {"_season": []}
+            top_by_week: Dict[str, List[Dict[str, object]]] = {"_season": []}
+            avg_by_week: Dict[str, List[Dict[str, object]]] = {"_season": []}
 
-        # Average weekly scoring rank of opponents table
-        avg_opp_rows: List[Dict[str, object]] = []
-        for team in teams:
-            opp_ranks = []
-            weeks_played = sorted(team_week_rank.get(team, {}).keys())
-            for wk in weeks_played:
-                opp = opponent_by_team_week.get(team, {}).get(wk)
-                if opp:
-                    opp_rank = team_week_rank.get(opp, {}).get(wk)
-                    if opp_rank is not None:
-                        opp_ranks.append(opp_rank)
-            avg_rank = round(sum(opp_ranks) / len(opp_ranks), 2) if opp_ranks else None
-            avg_opp_rows.append({"Team": team, "Average Opponent Scoring Rank": avg_rank})
+            for wk in weeks_present:
+                subset = [
+                    m
+                    for m in all_matchups
+                    if (not m.is_bye() and not m.is_incomplete() and int(m.week) <= wk)
+                ]
+                tables = compute_weekly_extra_tables(subset)
+                h2h_by_week[str(wk)] = tables["Head-to-Head Matrix"]
+                top_by_week[str(wk)] = tables["Top Scoring Placements"]
+                avg_by_week[str(wk)] = tables["Average Opponent Scoring Rank"]
 
-        season_tables["Average Opponent Scoring Rank"] = {"_season": avg_opp_rows}
+            if weeks_present:
+                final_wk = str(weeks_present[-1])
+                h2h_by_week["_season"] = h2h_by_week.get(final_wk, [])
+                top_by_week["_season"] = top_by_week.get(final_wk, [])
+                avg_by_week["_season"] = avg_by_week.get(final_wk, [])
+            else:
+                h2h_by_week["_season"] = []
+                top_by_week["_season"] = []
+                avg_by_week["_season"] = []
+
+            season_tables["Head-to-Head Matrix"] = h2h_by_week
+            season_tables["Top Scoring Placements"] = top_by_week
+            season_tables["Average Opponent Scoring Rank"] = avg_by_week
+        except Exception:
+            season_tables["Head-to-Head Matrix"] = {"_season": []}
+            season_tables["Top Scoring Placements"] = {"_season": []}
+            season_tables["Average Opponent Scoring Rank"] = {"_season": []}
 
         # Attach season_tables to additional_tables for current season
         additional_tables[current_season] = season_tables
 
-        # Historical seasons: keep previous behavior (attempt to add similar tables if data available)
+        # Historical seasons: keep previous behavior + add the three new tables (week-keyed)
         for year, mups in (historical_matchups_only or {}).items():
             try:
                 year_int = int(year)
             except Exception:
                 continue
             year_tables: Dict[str, Dict] = {}
+
             # Standings
             if historical_standings_only.get(year_int):
                 year_tables["Standings"] = {"_season": [_rowify(s) for s in historical_standings_only[year_int]]}
+
             # Cumulative Luck
             try:
                 year_tables["Cumulative Luck"] = {"_season": calculate_cumulative_luck_stats(mups)}
             except Exception:
                 year_tables.setdefault("Cumulative Luck", {"_season": []})
+
             # Weekly Luck from historical_luck_stats if present
             hist_weekly = {}
             if historical_luck_stats_only.get(year_int):
@@ -460,6 +479,45 @@ def main() -> int:
                 year_tables["Weekly Luck"] = {**hist_weekly, "_season": []}
             else:
                 year_tables.setdefault("Weekly Luck", {"_season": []})
+
+            # NEW: build week-keyed new tables for historical year
+            try:
+                weeks_present = sorted(
+                    {int(m.week) for m in mups if not m.is_bye() and not m.is_incomplete()}
+                )
+                h2h_by_week: Dict[str, List[Dict[str, object]]] = {"_season": []}
+                top_by_week: Dict[str, List[Dict[str, object]]] = {"_season": []}
+                avg_by_week: Dict[str, List[Dict[str, object]]] = {"_season": []}
+
+                for wk in weeks_present:
+                    subset = [
+                        m
+                        for m in mups
+                        if (not m.is_bye() and not m.is_incomplete() and int(m.week) <= wk)
+                    ]
+                    tables = compute_weekly_extra_tables(subset)
+                    h2h_by_week[str(wk)] = tables["Head-to-Head Matrix"]
+                    top_by_week[str(wk)] = tables["Top Scoring Placements"]
+                    avg_by_week[str(wk)] = tables["Average Opponent Scoring Rank"]
+
+                if weeks_present:
+                    final_wk = str(weeks_present[-1])
+                    h2h_by_week["_season"] = h2h_by_week.get(final_wk, [])
+                    top_by_week["_season"] = top_by_week.get(final_wk, [])
+                    avg_by_week["_season"] = avg_by_week.get(final_wk, [])
+                else:
+                    h2h_by_week["_season"] = []
+                    top_by_week["_season"] = []
+                    avg_by_week["_season"] = []
+
+                year_tables["Head-to-Head Matrix"] = h2h_by_week
+                year_tables["Top Scoring Placements"] = top_by_week
+                year_tables["Average Opponent Scoring Rank"] = avg_by_week
+            except Exception:
+                year_tables.setdefault("Head-to-Head Matrix", {"_season": []})
+                year_tables.setdefault("Top Scoring Placements", {"_season": []})
+                year_tables.setdefault("Average Opponent Scoring Rank", {"_season": []})
+
             additional_tables[year_int] = year_tables
 
         # Now render the page and include the additional_tables
@@ -475,14 +533,16 @@ def main() -> int:
             git_branch=git_branch,
             git_commit=git_commit,
             git_commit_full=git_commit_full,
-            additional_tables=additional_tables,  # <- pass in real data tables
+            additional_tables=additional_tables,  # <- pass in real data tables (now week-keyed for these three)
         )
 
         # Write output
         output_file = Path("index.html")
         output_file.write_text(html_content)
         logger.info(f"Generated HTML report: {output_file}")
-        logger.info(f"Report includes {len(historical_luck_stats)} seasons of data (additional_tables keys: {list(additional_tables.keys())})")
+        logger.info(
+            f"Report includes {len(historical_luck_stats)} seasons of data (additional_tables keys: {list(additional_tables.keys())})"
+        )
 
         return 0
 
