@@ -14,6 +14,11 @@
     {"name": "playoff_g4", "week": 16, "team_1": "IKA", "team_2": "HideYourBeagles"},
     {"name": "postseason_g7", "week": 16, "team_1": "nephophobiac", "team_2": "LosDophs"},
     {"name": "postseason_g8", "week": 16, "team_1": "badera", "team_2": "Ramzishu"},
-    {"name": "postseason_g9", "week": 16, "team_1": "CSP3", "team_2": "patjablonski"}
+    {"name": "postseason_g9", "week": 16, "team_1": "CSP3", "team_2": "patjablonski"},
+    {"name": "playoff_g3", "week": 17, "team_1": "tombradysarm", "team_2": "Favre_From_Over"},
+    {"name": "playoff_g4", "week": 17, "team_1": "IKA", "team_2": "HideYourBeagles"},
+    {"name": "postseason_g7", "week": 17, "team_1": "nephophobiac", "team_2": "LosDophs"},
+    {"name": "postseason_g10", "week": 17, "team_1": "CSP3", "team_2": "Ramzishu"},
+    {"name": "postseason_g11", "week": 17, "team_1": "badera", "team_2": "patjablonski"}
   ]
 }
